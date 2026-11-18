@@ -8,4 +8,6 @@ Zotero 10.0.8、PDF2zh 4.1.8、Python 3.12.10、pdf2zh-next 2.10.2、BabelDOC 0.
 
 日常快捷方式在 `127.0.0.1:8890` 上通过同样的启停测试。翻译中退出后，记录的 11 个进程全部释放，再次启动与退出均成功。测试用 Zotero 重新启动后也完成了第二份双语 PDF。切回旧版时，原桌面快捷方式恢复后的 SHA-256 与切换前一致，随后重新启用了 Codex。
 
+GitHub 托管的 Windows 2022 环境在含中文及空格的目录完成首次安装、重复安装与离线双语 PDF 验收。安装时验证了 182 个字体、布局及分词资源。另用 README 指向的官方独立 Codex 可执行文件，在同一 ChatGPT 账户上将合成句子译为“我们测量了 12 个样品 [1]。”。[Windows 验收工作流](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/actions/workflows/test.yml)
+
 下载 Windows ZIP 后按 README 安装。此版本使用上游通用 CLI，切换语言时需同步设置 Zotero 和适配器。

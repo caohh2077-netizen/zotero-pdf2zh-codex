@@ -10,7 +10,8 @@ import unittest
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
-sys.path[:0]=[str(ROOT/"src"),str(ROOT/"src/adapter")]
+sys.path[:0]=[str(ROOT/"src"),str(ROOT/"src/adapter"),str(ROOT/"scripts")]
+import check_upstream
 import codex_translate as cli
 import manage
 import migrate
@@ -21,6 +22,25 @@ from pdf2zh_next.translator.translator_impl.clitranslator import CLITranslatorTr
 
 
 class Contract(unittest.TestCase):
+    def test_upstream_report_detects_moved_tag_and_incomplete_candidate(self):
+        locked = {"tag": "v1", "commit": "1"*40, "assets": {"server.zip": "a"*64}}
+        reply = {
+            "commits/v1": {"sha": locked["commit"]},
+            "releases/tags/v1": {"assets": [{"name": "server.zip", "digest": "sha256:" + "a"*64}]},
+            "releases/latest": {"tag_name": "v2", "html_url": "https://example.com/v2",
+                                "assets": [{"name": "server.zip", "digest": "sha256:" + "b"*64}]},
+            "commits/v2": {"sha": "2"*40},
+        }
+        report = "\n".join(check_upstream.inspect(locked, reply.__getitem__))
+        self.assertIn("2"*40, report)
+        self.assertIn("sha256:" + "b"*64, report)
+        reply["releases/latest"]["assets"] = []
+        with self.assertRaisesRegex(ValueError, "missing server.zip"):
+            check_upstream.inspect(locked, reply.__getitem__)
+        reply["commits/v1"]["sha"] = "3"*40
+        with self.assertRaisesRegex(ValueError, "moved v1"):
+            check_upstream.inspect(locked, reply.__getitem__)
+
     def test_final_output_and_error_events(self):
         lines=[{"type":"thread.started"},{"type":"item.completed","item":{"type":"agent_message","text":"中文 [1]"}},
                {"type":"turn.completed"}]

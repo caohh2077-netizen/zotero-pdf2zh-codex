@@ -11,6 +11,8 @@
 3. 从解压目录运行 `.\Install.ps1 -PrepareOnly`。在 Zotero「工具 → 插件」中安装准备好的 `managed\downloads\zotero-pdf-2-zh.xpi` 并启用。退出 Zotero，再运行 `.\Activate.ps1` 和 `.\Use-Codex.ps1`。后者配置 PDF2zh 的服务、语言和双语选项，并保存这些选项的旧值。已启用 v4.1.8 的用户可在 Zotero 关闭时直接运行 `.\Install.ps1`，然后运行 `.\Use-Codex.ps1`。
 4. 双击桌面「Zotero 全文翻译」。在 PDF 或其父条目上右键，选择 **PDF2zh → PDF2zh: 翻译PDF**。译文会作为新附件放回条目。最小化可继续翻译，退出 Zotero 会取消未完成的任务。
 
+**获取指定 Codex 版本。** 已安装 Codex 桌面端的用户可用 `codex --version` 核对版本。也可从官方发布页下载 `codex-x86_64-pc-windows-msvc.exe`，用 `Get-FileHash` 对照 SHA-256 `a473edef0d52c4ffa067060ddd48a3d85720a3256cbd0510aab71d406f3af744`，将文件命名为 `codex.exe`。从该目录运行 `.\codex.exe login`，然后给安装脚本传 `-CodexPath` 和此文件的完整路径。[下载官方 Windows CLI](https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.11.1)
+
 ```powershell
 Get-FileHash .\zotero-pdf2zh-codex-0.1.0-windows-x64.zip -Algorithm SHA256
 # 与同一 Release 的 SHA256SUMS 对照。安装 GitHub CLI 的用户还可以核验构建来源：
