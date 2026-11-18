@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv*/
+.work/
+dist/
+*.log
+auth.json
+prefs.js
+*.sqlite*
+runtime/
+managed/
+config.toml

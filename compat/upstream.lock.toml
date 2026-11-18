@@ -1,0 +1,15 @@
+release = "0.1.0"
+repository = "caohh2077-netizen/zotero-pdf2zh-codex"
+upstream = "guaguastandup/zotero-pdf2zh"
+tag = "v4.1.8"
+commit = "5dd2eaf019f71266764c269bbd2104b559ae95cf"
+server_version = "4.1.8"
+zotero_versions = ["10.0.8"]
+codex_versions = ["0.169.0-alpha.11.1"]
+model = "gpt-6.2-sol"
+python = "3.12.10"
+pdf2zh_next = "2.10.2"
+babeldoc = "0.7.1"
+[assets]
+"server.zip" = "0bde231e1aae8e6a1204e4802a90d4c37692f12da131c97bf7ab5fa3d944b441"
+"zotero-pdf-2-zh.xpi" = "c5f72846547ed4898a29d0ee5b2cebffef40ee6548a8e1a4bfec9130fab82f16"
