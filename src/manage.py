@@ -291,6 +291,9 @@ def main():
 
 
 if __name__=="__main__":
+    # Windows pipes use the system code page, even when a valid path contains other characters.
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     try:
         main()
     except Exception as exc:

@@ -8,7 +8,7 @@
 
 1. 准备 Windows x64、Zotero **10.0.8**、64 位 CPython **3.12.10** 和官方 Codex CLI **0.169.0-alpha.11.1**。在终端执行 `codex login`，选择 ChatGPT 账户，然后运行 `codex login status`。本版验证模型为 `gpt-6.2-sol`。[Codex 登录说明](https://developers.openai.com/codex/auth/)
 2. 打开本项目 [Releases](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/releases)，下载同一版本的 Windows ZIP、`SHA256SUMS` 和 `build-source.json`。用下方命令校验，再解压到自己的目录。首次准备约 330 MB 的 Python wheels 和约 352 MB 的字体、布局模型等资源，另需官方 Server 与 XPI；预留 4 GB 空间。
-3. 从解压目录运行 `.\Install.ps1 -PrepareOnly`。在 Zotero「工具 → 插件」中安装准备好的 `managed\downloads\zotero-pdf-2-zh.xpi` 并启用；已有 v4.1.8 可直接使用。退出 Zotero，再运行 `.\Activate.ps1` 和 `.\Use-Codex.ps1`。后者只配置 PDF2zh 的服务、语言和双语选项，并保存这些选项的旧值。已有兼容插件时也可直接运行 `.\Install.ps1`。
+3. 从解压目录运行 `.\Install.ps1 -PrepareOnly`。在 Zotero「工具 → 插件」中安装准备好的 `managed\downloads\zotero-pdf-2-zh.xpi` 并启用。退出 Zotero，再运行 `.\Activate.ps1` 和 `.\Use-Codex.ps1`。后者配置 PDF2zh 的服务、语言和双语选项，并保存这些选项的旧值。已启用 v4.1.8 的用户可在 Zotero 关闭时直接运行 `.\Install.ps1`，然后运行 `.\Use-Codex.ps1`。
 4. 双击桌面「Zotero 全文翻译」。在 PDF 或其父条目上右键，选择 **PDF2zh → PDF2zh: 翻译PDF**。译文会作为新附件放回条目。最小化可继续翻译，退出 Zotero 会取消未完成的任务。
 
 ```powershell
