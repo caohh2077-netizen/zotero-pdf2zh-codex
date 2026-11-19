@@ -97,9 +97,9 @@ def patch(p):
         ('    private finishedFiles = new Set<number>();', '''    private finishedFiles = new Set<number>();
     private partialFiles = new Set<number>();'''),
         ('            this.window.changeLine({ idx, ...line });','''            this.window.changeLine({ idx, ...line });
-            // Zotero sizes a progress window when its headline changes. Reflow once
-            // after the file and summary lines have been updated and can wrap.
-            if (idx === this.summaryIdx) this.window.changeHeadline(getString("operation-progress-title"));'''),
+            // Zotero 10 sizes and tiles the popup at the end of addLines, even
+            // for an empty list. Reflow the wrapped rows without creating a row.
+            if (idx === this.summaryIdx) this.window.addLines([], []);'''),
         ('        const fileProgress = PDF2zhHelperFactory.jobProgressPercent({','''        if (update.phase === "file-done" && update.detail) this.partialFiles.add(update.current);
         const fileProgress = PDF2zhHelperFactory.jobProgressPercent({'''),
         (': update.phase === "file-done"\n', ': update.phase === "file-done" && !this.partialFiles.has(update.current)\n'),
