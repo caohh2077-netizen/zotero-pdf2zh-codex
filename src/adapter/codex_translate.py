@@ -14,7 +14,7 @@ from urllib.request import getproxies
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import LOCK, PKG, read, save, system_id
 from winjob import child_tree, execution_slot, mutex, resident_slot
-from options import MODEL_ID, EFFORTS
+from options import MODEL_ID, EFFORTS, prefix_digest, subject_prefix
 import uuid
 import win32api
 import win32con
@@ -123,10 +123,15 @@ def instruction(source, target):
             "Keep paragraph boundaries. Translate short headings and labels too.")
 
 
-def arguments(binary, source, target, model=None, effort=None):
+def effective_instruction(source, target, prefix=""):
+    base = instruction(source, target)
+    return prefix + "\n" + base if prefix else base
+
+
+def arguments(binary, source, target, model=None, effort=None, prompt=None):
     args = [str(binary), "exec", "--ignore-user-config", "--ephemeral", "--skip-git-repo-check",
             "--sandbox", "read-only", "--color", "never", "--json", "--model", model or LOCK["model"]]
-    return args + restrictions(effort) + [instruction(source, target)]
+    return args + restrictions(effort) + [prompt if prompt is not None else instruction(source, target)]
 
 
 def restrictions(effort=None):
@@ -185,12 +190,12 @@ def validate(source, translated):
         raise Failure("format")
 
 
-def invoke(binary, env, source, target, text, deadline, model=None, effort=None):
+def invoke(binary, env, source, target, text, deadline, model=None, effort=None, prompt=None):
     with tempfile.TemporaryDirectory(prefix="pdf2zh-text-") as work:
         with tempfile.TemporaryFile(dir=work) as inp, tempfile.TemporaryFile(dir=work) as out, tempfile.TemporaryFile(dir=work) as err:
             inp.write(text.encode("utf-8"))
             inp.seek(0)
-            with child_tree(arguments(binary, source, target, model, effort), env, work, inp, out, err) as (proc, _):
+            with child_tree(arguments(binary, source, target, model, effort, prompt), env, work, inp, out, err) as (proc, _):
                 if win32event.WaitForSingleObject(proc, max(0, int((deadline-time.monotonic())*1000))) != 0:
                     raise Failure("timeout")
                 rc = win32process.GetExitCodeProcess(proc)
@@ -230,7 +235,7 @@ def log_event(state, user, **fields):
                 stream.write(json.dumps(row) + "\n")
 
 
-def translate(settings, source, target, text, model=None, effort=None, runner=None):
+def translate(settings, source, target, text, model=None, effort=None, runner=None, *, prefix=""):
     model, effort = model or LOCK["model"], effort or LOCK["effort"]
     if not MODEL_ID.fullmatch(model) or effort not in EFFORTS:
         raise Failure("model")
@@ -262,9 +267,10 @@ def translate(settings, source, target, text, model=None, effort=None, runner=No
             with reserve(user) as pooled_call:
                 started = time.monotonic()
                 log_event(state, user, id=request_id, event="start", queued=round(started-queued, 3),
-                          model=model, effort=effort)
+                          model=model, effort=effort, **({"subjectPrefixSha256":prefix_digest(prefix)} if prefix else {}))
                 sent = True
-                return (pooled_call or runner or invoke)(binary, env, source, target, text, started+600, model, effort)
+                prompt = effective_instruction(source, target, prefix)
+                return (pooled_call or runner or invoke)(binary, env, source, target, text, started+600, model, effort, prompt)
     except Failure as exc:
         result = str(exc)
         if sent and result in ("rate", "quota", "login"):
@@ -295,7 +301,8 @@ def main():
         settings = read(SLOT/"settings.json")
         source = sys.stdin.buffer.read().decode("utf-8").replace("\r\n","\n")
         if source.strip():
-            output = translate(settings, args.source, args.target, source, args.model, args.effort)
+            prefix = subject_prefix(os.environ.get("ZPC_SUBJECT_FIELD", "")) if os.environ.get("ZPC_JOB_DIR") else ""
+            output = translate(settings, args.source, args.target, source, args.model, args.effort, prefix=prefix)
             sys.stdout.buffer.write(output.encode("utf-8"))
     except (Failure, OSError, ValueError, KeyError) as exc:
         key = str(exc) if isinstance(exc, Failure) else "config"

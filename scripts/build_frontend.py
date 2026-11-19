@@ -37,16 +37,37 @@ def patch(p):
                 <html:button id="pdf2zh-codex-refresh">刷新模型</html:button>
             </hbox>
             <html:span id="pdf2zh-codex-status" role="status"/>
+            <hbox align="center"><html:label for="pdf2zh-codex-subject">学科领域</html:label>
+                <html:select id="pdf2zh-codex-subject"/>
+            </hbox>
+            <hbox id="pdf2zh-codex-subject-row" align="center" style="display:none">
+                <html:label for="pdf2zh-codex-subject-custom">自定义领域</html:label>
+                <html:input id="pdf2zh-codex-subject-custom" type="text" size="30"
+                    aria-describedby="pdf2zh-codex-subject-preview"/>
+            </hbox>
+            <html:span id="pdf2zh-codex-subject-preview" role="status" aria-live="polite"
+                style="display:none;max-width:38em;white-space:normal;overflow-wrap:anywhere"/>
         </vbox>
         <!-- 设置翻译线程数、跳过最后几页、重命名 -->''')])
-    edit(p,"addon/prefs.js", [('pref("__prefsPrefix__.poolSize", 0);','pref("__prefsPrefix__.poolSize", 0);\npref("__prefsPrefix__.codexModel", "gpt-6.2-sol");\npref("__prefsPrefix__.codexEffort", "xhigh");')])
+    edit(p,"addon/prefs.js", [('pref("__prefsPrefix__.poolSize", 0);','pref("__prefsPrefix__.poolSize", 0);\npref("__prefsPrefix__.codexModel", "gpt-6.2-sol");\npref("__prefsPrefix__.codexEffort", "xhigh");\npref("__prefsPrefix__.codexSubjectChoice", "general");\npref("__prefsPrefix__.codexSubjectCustom", "");')])
     edit(p,"src/modules/preferenceScript.ts",[('export async function registerPrefsScripts','import {setupCodex} from "./codex";\n\nexport async function registerPrefsScripts'),('    bindPrefEvents();','    bindPrefEvents();\n    setupCodex(_window.document);')])
-    edit(p,"src/modules/pdf2zhTypes.ts",[('    next_service: string;','    next_service: string;\n    codex?: {protocol:number; model:string; effort:string};')])
+    edit(p,"src/modules/pdf2zhTypes.ts",[('    next_service: string;','    next_service: string;\n    codex?: ReturnType<typeof import("./codex").codexOptions>;')])
     edit(p,"src/modules/pdf2zhHelper.ts",[
-        ('            serverUrl: getPref("new_serverip")','            ...(getPref("engine") === "pdf2zh_next" && getPref("next_service") === "clitranslator" ? {codex:codexOptions()} : {}),\n            serverUrl: getPref("new_serverip")'),
+        ('        for (const item of selectedItems) {','''        let batchConfig: ServerConfig;
+        try {
+            batchConfig = this.getServerConfig(endpoint === "translate");
+        } catch (error) {
+            ztoolkit.getGlobal("alert")(error instanceof Error ? error.message : String(error));
+            return;
+        }
+        for (const item of selectedItems) {'''),
+        ('                const config = this.getServerConfig();','                const config = { ...batchConfig };'),
+        ('static getServerConfig(): ServerConfig','static getServerConfig(includeSubject=false): ServerConfig'),
+        ('            serverUrl: getPref("new_serverip")','            ...(getPref("engine") === "pdf2zh_next" && getPref("next_service") === "clitranslator" ? {codex:codexOptions(includeSubject)} : {}),\n            serverUrl: getPref("new_serverip")'),
         ('            // 获取激活的 LLM API 配置','''            if (config.codex) {
                 const capabilities = await catalog(config.serverUrl);
                 const selection = config.codex;
+                if (selection.subject) subjectPreview(selection.subject, capabilities.subjectContext);
                 if (!capabilities.models.some(m=>m.id===selection.model && m.efforts.includes(selection.effort))) {
                     throw new Error("所选 Codex 模型或强度不可用，请在首选项刷新模型。");
                 }
@@ -75,7 +96,7 @@ def patch(p):
         ('        return text;\n    }','        return update.phase === "file-done" && update.detail ? text+" · "+update.detail : text;\n    }'),
     ])
     helper = p/"src/modules/pdf2zhHelper.ts"
-    helper.write_text('import {catalog,codexOptions,codexSuffix,fragmentText,importOnce} from "./codex";\n'+helper.read_text("utf-8"),encoding="utf-8",newline="\n")
+    helper.write_text('import {catalog,codexOptions,codexSuffix,fragmentText,importOnce,subjectPreview} from "./codex";\n'+helper.read_text("utf-8"),encoding="utf-8",newline="\n")
     edit(p,"zotero-plugin.config.ts",[('buildVersion: pkg.version,','buildVersion: "'+LOCK["xpi_version"]+'",'),('buildTime: "{{buildTime}}"','buildTime: "2026-11-19"')])
     # Paired upgrades use Update.ps1. Independent Zotero updates never select the upstream XPI.
     edit(p,"addon/manifest.json",[('"__buildVersion__"',json.dumps(LOCK["xpi_version"])), ('"__updateURL__"', '"https://raw.githubusercontent.com/'+LOCK["repository"]+'/main/compat/xpi-updates.json"')])

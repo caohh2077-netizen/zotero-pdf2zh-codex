@@ -13,10 +13,12 @@ from launch import compatible, default_profile
 if __name__=="__main__":
     p=argparse.ArgumentParser()
     p.add_argument("--profile",type=Path)
+    p.add_argument("--before-pair",action="store_true")
     args=p.parse_args()
     s=read(PKG.parent/"settings.json")
     try:
-        compatible(args.profile or default_profile(),Path(s["zotero"]),preparing=True)
+        compatible(args.profile or default_profile(),Path(s["zotero"]),preparing=True,
+                   pairing_root=Path(s["root"]) if args.before_pair else None)
         binary=Path(s["codex"])
         if not binary.is_file() and shutil.which("codex.exe"):
             binary=Path(shutil.which("codex.exe"))

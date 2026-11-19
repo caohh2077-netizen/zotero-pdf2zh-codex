@@ -1,12 +1,47 @@
 import {getPref, setPref} from "../utils/prefs";
 
 type Model = {id:string; name:string; efforts:string[]; default:string};
-type Catalog = {protocol:number; models:Model[]; source:string; error?:string};
+type Subject = {kind:"preset"; id:string} | {kind:"custom"; name:string};
+type SubjectContext = {version:number; requestProtocol:number; template:string;
+    presets:{id:string; label:string; field:string}[]};
+type Catalog = {protocol:number; models:Model[]; source:string; error?:string; subjectContext?:SubjectContext};
 export const codexSuffix = /__([a-zA-Z0-9._-]+?)__(none|minimal|low|medium|high|xhigh|max|ultra)(?=\.pdf$)/i;
 
-export function codexOptions() {
-    return {protocol:2, model:String(getPref("codexModel") || "gpt-6.2-sol"),
-            effort:String(getPref("codexEffort") || "xhigh")};
+const invalidLine = /[\p{C}\p{Zl}\p{Zp}]/u;
+function normalizeSubject(value:string) {
+    if (invalidLine.test(value)) throw new Error("学科领域请使用单行文字，移除换行或不可见字符。");
+    const field = value.normalize("NFKC").replace(/\p{Zs}+/gu, " ").trim();
+    if (!field || [...field].length > 64) throw new Error("学科领域须为 1–64 个字符。");
+    if (!/\p{L}/u.test(field)) throw new Error("学科领域须包含文字。");
+    if (!/^[\p{L}\p{M}\p{N}\p{Pd} /+&,()'’·]+$/u.test(field)) {
+        throw new Error("请输入领域名称，移除句末标点或其他特殊字符。");
+    }
+    return field;
+}
+
+function subjectChoice():string {
+    return String(getPref("codexSubjectChoice") || "general");
+}
+
+function readSubject():Subject | undefined {
+    const choice = subjectChoice();
+    if (choice === "general") return undefined;
+    if (choice === "custom") return {kind:"custom", name:normalizeSubject(String(getPref("codexSubjectCustom") || ""))};
+    return {kind:"preset", id:choice};
+}
+
+export function subjectPreview(subject:Subject, context?:SubjectContext):string {
+    if (context?.version !== 1 || context.requestProtocol !== 3) throw new Error("学科领域需要配套新版后端。");
+    const field = subject.kind === "custom" ? normalizeSubject(subject.name) :
+        context.presets.find(p => p.id === subject.id)?.field;
+    if (!field) throw new Error("未知学科预设，请重新选择。");
+    return context.template.replace("{field}", () => field);
+}
+
+export function codexOptions(includeSubject=false):{model:string; effort:string; protocol:number; subject?:Subject} {
+    const subject = includeSubject ? readSubject() : undefined;
+    return {model:String(getPref("codexModel") || "gpt-6.2-sol"), effort:String(getPref("codexEffort") || "xhigh"),
+            ...(subject ? {protocol:3, subject} : {protocol:2})};
 }
 
 export async function catalog(server:string, refresh=false):Promise<Catalog> {
@@ -26,6 +61,11 @@ export function setupCodex(doc:Document) {
     const effort = el("pdf2zh-codex-effort") as HTMLSelectElement;
     const box = el("pdf2zh-codex-options");
     const status = el("pdf2zh-codex-status");
+    const subjectMenu = el("pdf2zh-codex-subject") as HTMLSelectElement;
+    const custom = el("pdf2zh-codex-subject-custom") as HTMLInputElement;
+    const customRow = el("pdf2zh-codex-subject-row");
+    const preview = el("pdf2zh-codex-subject-preview");
+    let subjectContext:SubjectContext | undefined;
     const field = (name:string) => el("zotero-prefpane-pdf2zh-"+name) as HTMLInputElement;
     let models:Model[] = [], generation = 0;
     function list(control:HTMLSelectElement, values:Array<[string,string]>, selected:string) {
@@ -39,6 +79,46 @@ export function setupCodex(doc:Document) {
         }
         control.value = selected;
     }
+    function renderSubject() {
+        const choice = subjectChoice();
+        customRow.style.display = choice === "custom" ? "" : "none";
+        preview.style.display = choice === "general" ? "none" : "";
+        custom.removeAttribute("aria-invalid");
+        try {
+            const selected = readSubject();
+            preview.textContent = selected ? "提示词首句　" + subjectPreview(selected, subjectContext) : "";
+        } catch (error) {
+            preview.textContent = error instanceof Error ? error.message : String(error);
+            if (choice === "custom") custom.setAttribute("aria-invalid", "true");
+        }
+    }
+    function setSubjects(context?:SubjectContext) {
+        subjectContext = context;
+        const choices:Array<[string,string]> = [["general","通用（不指定领域）"]];
+        for (const p of context?.presets || []) choices.push([p.id,p.label]);
+        choices.push(["custom","自定义…"]);
+        list(subjectMenu, choices, subjectChoice());
+        renderSubject();
+    }
+    custom.value = String(getPref("codexSubjectCustom") || "");
+    subjectMenu.addEventListener("change", () => {
+        setPref("codexSubjectChoice", subjectMenu.value);
+        renderSubject();
+        if (subjectMenu.value === "custom") custom.focus();
+    });
+    custom.addEventListener("input", () => { setPref("codexSubjectCustom",custom.value); renderSubject(); });
+    custom.addEventListener("paste", event => {
+        const text = event.clipboardData?.getData("text/plain") || "";
+        if (invalidLine.test(text)) {
+            // A single-line HTML input silently removes newlines before firing input.
+            event.preventDefault();
+            const raw = custom.value.slice(0,custom.selectionStart ?? 0) + text +
+                        custom.value.slice(custom.selectionEnd ?? custom.value.length);
+            custom.value = raw;
+            setPref("codexSubjectCustom",raw);
+            renderSubject();
+        }
+    });
     function setEfforts(changed=false) {
         const current = models.find(m=>m.id === model.value);
         let chosen = codexOptions().effort;
@@ -56,6 +136,7 @@ export function setupCodex(doc:Document) {
         const workers = field("poolSize");
         if (visible) {workers.min="0";workers.max="20";} else {workers.removeAttribute("max");}
         if (!visible) return;
+        setSubjects();
         list(model, [], codexOptions().model);
         setEfforts();
         status.textContent = "正在读取账户模型…";
@@ -63,6 +144,7 @@ export function setupCodex(doc:Document) {
             const data = await catalog(String(getPref("new_serverip")),refresh);
             if (n !== generation) return;
             models = data.models;
+            setSubjects(data.subjectContext);
             list(model, models.map(m=>[m.id,m.name]), codexOptions().model);
             status.textContent = setEfforts() ? "" : "上次选择在当前目录中不可用，请重新选择。";
         } catch(error) {

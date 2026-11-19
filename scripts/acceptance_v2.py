@@ -50,12 +50,15 @@ class Server:
         with self.op.open(req,timeout=25) as res:
             return json.load(res)
 
-    def run(self,path,model,effort,label):
+    def run(self,path,model,effort,label,subject=None):
         data=path.read_bytes()
         digest=hashlib.sha256(data).digest()
+        options={"protocol":2,"model":model,"effort":effort}
+        if subject is not None:
+            options.update(protocol=3,subject=subject)
         task=self.call("/translate",dict(fileName="并行测试论文.pdf",fileContent=base64.b64encode(data).decode(),
             engine="pdf2zh_next",next_service="clitranslator",sourceLang="en",targetLang="zh-CN",qps=10,poolSize=10,
-            codex={"protocol":2,"model":model,"effort":effort},asyncJob=True,autoOcr=True,disableGlossary=True,
+            codex=options,asyncJob=True,autoOcr=True,disableGlossary=True,
             noMono=True,noDual=False,mono=False,dual=True,dualMode="LR",noWatermark=True))
         ident=task["taskId"]
         timeline=[]
@@ -95,7 +98,7 @@ class Server:
                     assert "23.5" in "".join(text),(label,"missing number")
                     assert hashlib.sha256(path.read_bytes()).digest()==digest
                     assert f["total"] is not None and f["current"]==f["total"] and f["failed"]==0,(label,f)
-                    result={"case":label,"model":model,"effort":effort,"pages":pages,"fragments":f,
+                    result={"case":label,"taskId":ident,"model":model,"effort":effort,"pages":pages,"fragments":f,
                             "timeline":timeline,"filename":file.name}
                     print(json.dumps(result,ensure_ascii=False),flush=True)
                     return result
@@ -108,7 +111,7 @@ if __name__=="__main__":
     a.add_argument("--port",type=int,default=18890)
     a.add_argument("--work",type=Path,required=True)
     a.add_argument("--tessdata",type=Path,required=True)
-    a.add_argument("--cases",nargs="+",choices=["text","hot","scan","mixed","ocr-layer","models"],
+    a.add_argument("--cases",nargs="+",choices=["text","hot","scan","mixed","ocr-layer","models","subjects"],
                    default=["text","hot","scan","mixed","ocr-layer","models"])
     args=a.parse_args()
     args.work.mkdir(parents=True,exist_ok=True)
@@ -117,6 +120,18 @@ if __name__=="__main__":
     assert server.call("/health")["codexProtocol"]==2
     cases=[]
     for case in args.cases:
+        if case=="subjects":
+            path=args.work/"text.pdf"
+            if not path.exists():
+                fixture(path,"text")
+            sequence=[(None,True),("ai-ml",True),("electrical-power",True),("ai-ml",False),(None,False),
+                      ("ai-machine-learning",True),("ai-machine-learning",False),("ai-ml",False)]
+            for index,(key,cold) in enumerate(sequence):
+                subject={"kind":"preset","id":key} if key else None
+                r=server.run(path,"gpt-6.2-sol","xhigh",f"subject-{index+1}-{key or 'general'}",subject)
+                assert (r["fragments"]["calls"]>0) == cold,r
+                cases.append(r)
+            continue
         if case=="models":
             path=args.work/"text.pdf"
             if not path.exists():fixture(path,"text")

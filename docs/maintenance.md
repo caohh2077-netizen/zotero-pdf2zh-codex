@@ -11,6 +11,15 @@
 
 故障诊断按顺序检查 `Doctor`、`/health` 和 `managed/state/adapter-events.jsonl`。该日志仅包含时间、错误类别与耗时。`ZPC_LOGIN` 需要在本机重新登录；`ZPC_QUOTA` 请检查订阅额度；`ZPC_NETWORK` 请检查连接和本机系统代理；`ZPC_FORMAT` 表示回答为空或格式占位符异常。修复后运行 `Doctor.ps1` 再试。个别片段失败时，上游可能保留原文，因此验收要抽查新附件的页面内容。
 
+## 学科领域验收
+
+在候选槽的专用测试库中，运行下列命令。缓存顺序验证使用未翻译过该样稿的候选槽。两次术语对照的模型、强度和输入一致，默认 Sol/xhigh、10 个 Worker。48 份输出写到新目录的 blind.jsonl，独立的 key.json 只在锁定评分后查看。对有歧义的词请结合源句核对，分别报告改善与退步。
+
+~~~powershell
+& "$slot\runtime\Scripts\python.exe" -I -X utf8 scripts/acceptance_v2.py --port 18890 --tessdata "$slot\tessdata" --work .work/subject-pdf --cases subjects
+& "$slot\runtime\Scripts\python.exe" -I -X utf8 scripts/subject_study.py --settings "$slot\settings.json" --live --out .work/subject-study
+~~~
+
 ## 0.2 前后端及实验复现
 
 源码在固定的上游提交上构建。运行 `python scripts/build_frontend.py --out rebuilt.xpi` 会校验源码归档，应用 `scripts/build_frontend.py` 和 `compat/frontend/codex.ts` 中的改动，执行 `npm ci`、TypeScript 检查和上游打包，再固定 ZIP 成员顺序和时间。用 `Get-FileHash rebuilt.xpi` 对照兼容清单的 `xpi_sha256`。服务端及翻译器的定点改动见 `src/patch_runtime.py`。源文件摘要或替换位置不匹配时，候选安装会中止。

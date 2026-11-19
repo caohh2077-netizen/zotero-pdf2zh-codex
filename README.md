@@ -14,9 +14,9 @@
 **获取指定 Codex 版本。** 已安装 Codex 桌面端的用户可用 `codex --version` 核对版本。也可从官方发布页下载 `codex-x86_64-pc-windows-msvc.exe`，用 `Get-FileHash` 对照 SHA-256 `a473edef0d52c4ffa067060ddd48a3d85720a3256cbd0510aab71d406f3af744`，将文件命名为 `codex.exe`。从该目录运行 `.\codex.exe login`，然后给安装脚本传 `-CodexPath` 和此文件的完整路径。[下载官方 Windows CLI](https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.11.1)
 
 ```powershell
-Get-FileHash .\zotero-pdf2zh-codex-0.2.0-windows-x64.zip -Algorithm SHA256
+Get-FileHash .\zotero-pdf2zh-codex-0.3.0-windows-x64.zip -Algorithm SHA256
 # 与同一 Release 的 SHA256SUMS 对照。安装 GitHub CLI 的用户还可以核验构建来源：
-gh attestation verify .\zotero-pdf2zh-codex-0.2.0-windows-x64.zip --repo caohh2077-netizen/zotero-pdf2zh-codex
+gh attestation verify .\zotero-pdf2zh-codex-0.3.0-windows-x64.zip --repo caohh2077-netizen/zotero-pdf2zh-codex
 ```
 
 默认安装在 `%LOCALAPPDATA%\Zotero-PDF2zh-Codex`。使用现有目录时，给 **准备、激活及首次配置** 传相同的 `-InstallRoot`。自定义路径示例：
@@ -28,6 +28,8 @@ gh attestation verify .\zotero-pdf2zh-codex-0.2.0-windows-x64.zip --repo caohh20
 ```
 
 打开「编辑 → 设置 → PDF2zh」，选择 `pdf2zh_next` 和「Codex（本机订阅）」。模型与思考强度可单独选择，点击「刷新模型」可读取当前账户的目录。默认使用 Sol、xhigh 和 10 个 Worker。Worker 可设 1–20，设为 0 时跟随 QPS，最高 20。QPS 限制启动频率，同一用户的并发上限为 20。每份 PDF 使用提交时的选项，双语附件名以 `__gpt-6.2-sol__xhigh.pdf` 等后缀结尾。
+
+在思考强度下面的「学科领域」选择通用、11 个预设之一，或输入自己的中英文学科名称。第一项学科预设为「人工智能、机器学习与具身智能」，第二项为「人工智能、机器学习」。选择后可预览对应的英文首句。通用直接使用原提示词。一次右键操作中的所有文件共用提交时的领域，译文缓存按实际首句区分。
 
 右下角浮窗按文件显示实际段落进度。单段失败会保留该段原文及其余成功译文，并显示失败数。同一任务每段只发起一次 Codex 调用。CLI 可以在该调用内恢复连接，单段模型预算为 600 秒，等候并发槽位单独计时。再次主动翻译时可复用相同语言、模型、强度及提示词版本的已成功片段。自动 OCR 随包校验英文字库。
 
@@ -43,7 +45,7 @@ gh attestation verify .\zotero-pdf2zh-codex-0.2.0-windows-x64.zip --repo caohh20
 ## 开发者复现
 
 ```powershell
-git clone --branch v0.2.0 https://github.com/caohh2077-netizen/zotero-pdf2zh-codex.git
+git clone --branch v0.3.0 https://github.com/caohh2077-netizen/zotero-pdf2zh-codex.git
 cd zotero-pdf2zh-codex
 .\scripts\Bootstrap-Dev.ps1
 .\scripts\Test.ps1 -Suite Offline

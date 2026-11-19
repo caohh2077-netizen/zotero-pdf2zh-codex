@@ -35,7 +35,7 @@ async def check(slot, work):
     args=["pdf2zh_next",str(source),"--clitranslator","--config-file",str(cfg),"--output",str(work),
           "--lang-in","en","--lang-out","zh-CN","--qps","10","--no-mono","--no-auto-extract-glossary",
           "--ignore-cache","--watermark-output-mode","no_watermark"]
-    def fake(binary, env, source, target, text, deadline, model, effort):
+    def fake(binary, env, source, target, text, deadline, model, effort, prompt):
         if "We tested" in text:
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1",0))

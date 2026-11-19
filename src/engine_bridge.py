@@ -7,7 +7,7 @@ import threading
 
 from adapter.codex_translate import SLOT, language, translate
 from common import read
-from options import EFFORTS, MODEL_ID
+from options import EFFORTS, MODEL_ID, prefix_digest, subject_prefix
 
 
 def bind(translator):
@@ -27,6 +27,9 @@ def bind(translator):
     if not os.environ.get("ZPC_JOB_DIR"):
         raise ValueError("请从配套的 Codex 翻译前端提交文档。")
     settings = read(SLOT / "settings.json")
+    prefix = subject_prefix(os.environ.get("ZPC_SUBJECT_FIELD", ""))
+    if prefix:
+        translator.add_cache_impact_parameters("codex_subject_v1", prefix_digest(prefix))
     runner = None
     if os.environ.get("ZPC_EXPERIMENT") == "app-server":
         from adapter.appserver import Pool
@@ -44,7 +47,7 @@ def bind(translator):
                 future = pending[text] = Future()
         if owner:
             try:
-                result = translate(settings, source, target, text, model, effort, runner)
+                result = translate(settings, source, target, text, model, effort, runner, prefix=prefix)
                 future.set_result(result)
             except Exception as error:
                 future.set_exception(error)

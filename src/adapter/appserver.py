@@ -10,6 +10,7 @@ import threading
 import time
 
 from adapter.codex_translate import Failure, classify, instruction, restrictions, validate
+from common import LOCK
 from winjob import child_tree, resident_slot
 
 
@@ -39,7 +40,7 @@ class Worker:
                 finally:
                     self.events.put(None)
             threading.Thread(target=receive, daemon=True).start()
-            self.call("initialize", {"clientInfo":{"name":"pdf2zh_codex","title":"PDF2zh","version":"0.2.0"},
+            self.call("initialize", {"clientInfo":{"name":"pdf2zh_codex","title":"PDF2zh","version":LOCK["release"]},
                                      "capabilities":{"experimentalApi":True}}, time.monotonic()+25)
             self.send({"method":"initialized"})
         except BaseException:
@@ -76,10 +77,10 @@ class Worker:
             if row.get("method") in ("turn/completed", "item/completed", "item/started", "error"):
                 pending.append(row)
 
-    def run(self, model, effort, source, target, text, deadline):
+    def run(self, model, effort, text, deadline, prompt):
         thread = self.call("thread/start", {
             "model":model, "modelProvider":"openai", "ephemeral":True, "cwd":self.cwd,
-            "sandbox":"read-only", "approvalPolicy":"never", "baseInstructions":instruction(source, target),
+            "sandbox":"read-only", "approvalPolicy":"never", "baseInstructions":prompt,
             "config":{"web_search":"disabled","mcp_servers":{},"project_doc_max_bytes":0},
         }, deadline)["thread"]["id"]
         turn = None
@@ -147,12 +148,12 @@ class Pool:
         with ExitStack() as pending:
             if worker is None:
                 pending.enter_context(resident_slot(user))
-            def run(binary, env, source, target, text, deadline, model, effort):
+            def run(binary, env, source, target, text, deadline, model, effort, prompt=None):
                 nonlocal worker
                 if worker is None:
                     worker = Worker(binary, env, effort)
                     worker.residency = pending.pop_all()
-                return worker.run(model, effort, source, target, text, deadline)
+                return worker.run(model, effort, text, deadline, prompt if prompt is not None else instruction(source, target))
             try:
                 yield run
             except BaseException:

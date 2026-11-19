@@ -14,6 +14,19 @@ import win32con
 import win32file
 
 EXTENSION = "pdf2zh@guaguastandup.com"
+OFFICIAL_XPI_SHA = "c5f72846547ed4898a29d0ee5b2cebffef40ee6548a8e1a4bfec9130fab82f16"
+
+
+def pairing_state(managed, profile):
+    marker = managed/"state"/("pair-"+hashlib.sha256(str(profile).casefold().encode()).hexdigest()[:20]+".json")
+    previous = json.loads(marker.read_bytes()) if marker.is_file() else {}
+    path = profile/"extensions"/(EXTENSION+".xpi")
+    current = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    return marker, previous, path, current
+
+
+def known_xpi(current, target, previous):
+    return current is not None and current in (target, OFFICIAL_XPI_SHA, previous.get("sha"))
 
 
 def atomic(path, data):
@@ -52,21 +65,18 @@ def pair(root, chosen, profile=None):
     source = slot/"pkg/compat/pdf2zh-codex.xpi" if v2 else managed/"downloads/zotero-pdf-2-zh.xpi"
     new = source.read_bytes()
     sourcehash = hashlib.sha256(new).hexdigest()
-    expected = manifest["xpi_sha256"] if v2 else "c5f72846547ed4898a29d0ee5b2cebffef40ee6548a8e1a4bfec9130fab82f16"
+    expected = manifest["xpi_sha256"] if v2 else OFFICIAL_XPI_SHA
     if expected != sourcehash:
         raise RuntimeError("配套 XPI 校验失败。")
     profile = profile or default_profile()
-    path = profile/"extensions"/(EXTENSION+".xpi")
-    marker = managed/"state"/("pair-"+hashlib.sha256(str(profile).casefold().encode()).hexdigest()[:20]+".json")
-    previous = json.loads(marker.read_bytes()) if marker.is_file() else {}
-    current = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+    marker, previous, path, current = pairing_state(managed, profile)
     database = profile/"extensions.json"
     active = next((extension for extension in json.loads(database.read_bytes()).get("addons", [])
                    if extension["id"] == EXTENSION), {}) if database.is_file() else {}
     version = manifest["xpi_version"] if v2 else "4.1.8"
     if current == sourcehash and previous.get("sha") == sourcehash and active.get("version") == version:
         return
-    if current not in (None, sourcehash, previous.get("sha"), "c5f72846547ed4898a29d0ee5b2cebffef40ee6548a8e1a4bfec9130fab82f16"):
+    if current is not None and not known_xpi(current, sourcehash, previous):
         raise RuntimeError("当前配置的 XPI 来自另一版本，须先核对版本。")
     guard = win32file.CreateFile(str(profile/"parent.lock"),win32con.GENERIC_READ|win32con.GENERIC_WRITE,
                                  0,None,win32con.OPEN_ALWAYS,win32con.FILE_ATTRIBUTE_NORMAL,None)

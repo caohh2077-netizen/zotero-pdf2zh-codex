@@ -1,6 +1,6 @@
-release = "0.2.0"
-xpi_version = "4.1.8.2"
-xpi_sha256 = "20cd9e1bd02d459eeb3b639823cc993e5a861d02a737053bec5742246a42f2fd"
+release = "0.3.0"
+xpi_version = "4.1.8.3"
+xpi_sha256 = "1a53acfde97b15b19ad628de6817d48949552ba71efa518d90ef80d12efcbd6e"
 protocol = 2
 effort = "xhigh"
 source_zip_sha256 = "a153735f41ff97ac7f2d57e37da4ca389fbe3cbe03b4c17afa83a63b884ab047"

@@ -89,7 +89,7 @@ class FragmentsContract(unittest.TestCase):
             calls=[]
             # The synthetic CLI connects to a closed loopback port for exactly one
             # marked paragraph. Its own process reports the final network failure.
-            def invoke(binary,env,source,target,text,deadline,model,effort):
+            def invoke(binary,env,source,target,text,deadline,model,effort,prompt):
                 calls.append((text,model,effort))
                 if text=="broken":
                     code="import socket,sys;s=socket.socket();sys.exit(s.connect_ex(('127.0.0.1',int(sys.argv[1]))) != 0)"

@@ -119,7 +119,8 @@ class ManagedJobs:
             s = job.selection
             info.update(modelName=s.model, fileName=job.title+".pdf", fragments=job.fragments.snapshot(),
                         message=job.fragments.message())
-            info["config"].update(model=s.model, effort=s.effort, protocol=2, poolSize=s.workers)
+            info["config"].update(model=s.model, effort=s.effort, protocol=3 if s.subject else 2,
+                                  poolSize=s.workers, subjectField=s.subject)
         return info
 
     def engine(self, job, config, cmd):
@@ -134,7 +135,8 @@ class ManagedJobs:
         if "--pool-max-worker" not in args:
             args.extend(["--pool-max-worker", str(s.workers)])
         spawn = [SLOT/"runtime/Scripts/python.exe", "-I", "-X", "utf8", PKG/"src/engine_runner.py", *args]
-        env = dict(os.environ, ZPC_JOB_DIR=str(job.directory), ZPC_TESSDATA=str(SLOT/"tessdata"))
+        env = dict(os.environ, ZPC_JOB_DIR=str(job.directory), ZPC_TESSDATA=str(SLOT/"tessdata"),
+                   ZPC_SUBJECT_FIELD=s.subject)
         paths, message = [], ""
         progress = job.fragments
         with open(os.devnull,"rb") as inp, open(os.devnull,"wb") as out:

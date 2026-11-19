@@ -41,7 +41,7 @@ def default_profile():
     return (base/selected["Path"]).resolve() if selected.get("IsRelative") == "1" else Path(selected["Path"])
 
 
-def compatible(profile, zotero, preparing=False):
+def compatible(profile, zotero, preparing=False, pairing_root=None):
     ini = configparser.ConfigParser(interpolation=None, strict=False)
     ini.read(zotero.parent/"app/application.ini", encoding="utf-8-sig")
     if not ini.has_option("App", "Version"):
@@ -53,7 +53,13 @@ def compatible(profile, zotero, preparing=False):
         ext = next(a for a in read(profile/"extensions.json")["addons"] if a["id"]==EXTENSION)
     except (OSError, KeyError, StopIteration):
         raise RuntimeError("Install and enable the supplied PDF2zh XPI in this Zotero profile.") from None
-    if not ext.get("active") or ext["version"] not in ({LOCK["xpi_version"],LOCK["server_version"]} if preparing else {LOCK["xpi_version"]}):
+    accepted = {LOCK["xpi_version"], LOCK["server_version"]} if preparing else {LOCK["xpi_version"]}
+    matches = ext.get("version") in accepted
+    if pairing_root is not None:
+        from pair_frontend import known_xpi, pairing_state
+        _, previous, _, current = pairing_state(pairing_root/"managed", profile)
+        matches = known_xpi(current, LOCK["xpi_sha256"], previous)
+    if not ext.get("active") or not matches:
         raise RuntimeError("The enabled PDF2zh XPI must match "+LOCK["xpi_version"])
 
 

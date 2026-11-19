@@ -1,4 +1,5 @@
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -134,6 +135,33 @@ class Contract(unittest.TestCase):
                     self.assertEqual(read(state/"active.json"),{"active":"a","previous":"b"})
                     with self.assertRaises(FileNotFoundError):
                         manage.active_switch(root,"incomplete")
+
+    def test_upgrade_from_enabled_previous_paired_xpi(self):
+        from launcher.launch import compatible
+        from pair_frontend import EXTENSION, pairing_state
+
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            profile = root/"profile"
+            app = root/"zotero.exe"
+            (root/"application.ini").write_text("[App]\nVersion="+LOCK["zotero_versions"][0], "utf-8")
+            extension = {"id": EXTENSION, "active": True, "version": "4.1.8.2"}
+            save(profile/"extensions.json", {"addons": [extension]})
+            marker, _, path, _ = pairing_state(root/"managed", profile)
+            atomic(path, b"previous managed XPI")
+            save(marker, {"sha": hashlib.sha256(path.read_bytes()).hexdigest()})
+            compatible(profile, app, pairing_root=root)
+            with self.assertRaises(RuntimeError):
+                compatible(profile, app)
+            extension["active"] = False
+            save(profile/"extensions.json", {"addons": [extension]})
+            with self.assertRaises(RuntimeError):
+                compatible(profile, app, pairing_root=root)
+            extension.update(active=True, version=LOCK["xpi_version"])
+            save(profile/"extensions.json", {"addons": [extension]})
+            atomic(path, b"unrecognized XPI")
+            with self.assertRaises(RuntimeError):
+                compatible(profile, app, pairing_root=root)
 
     def test_new_template_keeps_known_values_and_new_defaults(self):
         current=tomlkit.parse('[service]\nlabel="default"\nworkers=2\nnew_flag=true\n')

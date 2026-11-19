@@ -270,7 +270,7 @@ def main():
         slot=install(root,args)
         if args.action=="prepare":
             return
-        runtime(slot,slot/"pkg/src/doctor.py",*(["--profile",args.profile] if args.profile else []))
+        runtime(slot,slot/"pkg/src/doctor.py","--before-pair",*(["--profile",args.profile] if args.profile else []))
         with install_lock(state):
             active_switch(root,slot.name,slot)
         return
@@ -284,7 +284,7 @@ def main():
         elif args.action=="candidate":
             shortcut(root,slot,True,args.profile)
         elif args.action=="activate":
-            runtime(slot,slot/"pkg/src/doctor.py")
+            runtime(slot,slot/"pkg/src/doctor.py","--before-pair")
             active_switch(root,candidate,slot)
         elif args.action in ("use-codex","restore-prefs"):
             options=(["--restore"] if args.action=="restore-prefs" else [])+(["--profile",args.profile] if args.profile else [])
