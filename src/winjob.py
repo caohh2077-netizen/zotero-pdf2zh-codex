@@ -18,9 +18,11 @@ import winerror
 
 
 @contextmanager
-def resident_slot(user, limit=20):
+def resident_slot(user, limit=20, *, deadline=None):
     """Keep a slot until the CLI has exited, even while a pooled worker is idle."""
     while True:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise TimeoutError("Codex resident slot wait expired")
         for number in range(limit):
             win32api.SetLastError(0)
             handle = event.CreateEvent(None, False, False, f"Local\\ZPC.resident.{user}.{number}")
@@ -31,7 +33,7 @@ def resident_slot(user, limit=20):
                     handle.Close()
                 return
             handle.Close()
-        time.sleep(.1)
+        time.sleep(.1 if deadline is None else min(.1, max(0, deadline-time.monotonic())))
 
 
 @contextmanager
@@ -98,14 +100,17 @@ def child_tree(argv, env, cwd, stdin, stdout, stderr, *, wait_for_tree=False):
 
 
 @contextmanager
-def execution_slot(user, limit=20):
+def execution_slot(user, limit=20, *, deadline=None):
     """The owning Windows thread releases its slot, including on abnormal exit."""
     handles = []
     index = None
     try:
         for number in range(limit):
             handles.append(event.CreateMutex(None, False, f"Local\\ZPC.fragment.{user}.{number}"))
-        result = event.WaitForMultipleObjects(handles, False, event.INFINITE)
+        wait_ms = event.INFINITE if deadline is None else max(0, int((deadline-time.monotonic())*1000))
+        result = event.WaitForMultipleObjects(handles, False, wait_ms)
+        if result == event.WAIT_TIMEOUT:
+            raise TimeoutError("Codex execution slot wait expired")
         index = result - 128 if 128 <= result < 128 + limit else result
         if not 0 <= index < limit:
             index = None

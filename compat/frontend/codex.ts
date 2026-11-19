@@ -162,12 +162,13 @@ export function setupCodex(doc:Document) {
 
 export function fragmentText(task:Record<string,unknown>):string {
     const f = task.fragments as {current:number; total:number|null; part:number; parts:number; partCurrent:number;
-                                 partTotal:number|null; stage:string; failed:number} | undefined;
+                                 partTotal:number|null; stage:string; failed:number; retrying?:number} | undefined;
     if (!f || f.stage === "ocr") return String(task.message || task.status || "");
     if (f.stage === "analysis") return "正在分析版面，正在统计片段…";
     const text = f.total == null ? "第 "+f.part+" / "+f.parts+" 部分 · 本部分 "+f.partCurrent+" / "+f.partTotal+" · 全篇已处理 "+f.current :
                  "已处理 "+f.current+" / "+f.total+" 个片段";
-    return text + (f.failed ? " · "+f.failed+" 个片段失败" : "") + (f.stage === "typeset" ? " · 正在生成 PDF" : "");
+    return text + (f.retrying ? " · "+f.retrying+" 段正在重试" : "") +
+        (f.failed ? " · "+f.failed+" 个片段失败" : "") + (f.stage === "typeset" ? " · 正在生成 PDF" : "");
 }
 
 const importing = new Map<string,Promise<void>>();

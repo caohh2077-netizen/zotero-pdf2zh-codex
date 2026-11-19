@@ -45,10 +45,10 @@ class SubjectTests(unittest.TestCase):
         self.assertEqual(len(base), 465)
         self.assertEqual(hashlib.sha256(base).hexdigest(), "b6fcd7a93127c0dd398ff909b2582da6ae2f578a06e6fe3e05fe0256adb7a6e6")
         for source, target in (("en","zh-CN"), ("de","en")):
-            for field in (SUBJECT_PRESETS["ai-ml"][1], "电力系统继电保护", "speech science"):
+            for field in (SUBJECT_PRESETS["ai-ml"][1], SUBJECT_PRESETS["ai-machine-learning"][1], "电力系统继电保护", "speech science"):
                 actual = cli.effective_instruction(source, target, subject_prefix(field)).encode().split(b"\n")
-                self.assertEqual(actual, [f"Use the standard terminology of {field}.".encode(),
-                                          cli.instruction(source, target).encode()])
+                self.assertEqual(actual, [f"As a translator specializing in {field}, choose established terms in the target language that fit the context.".encode(),
+                                          cli.instruction(source, target).removeprefix("You are a scientific translator. ").encode()])
 
     def test_cli_and_app_server_boundaries(self):
         text = "<style>Signal {v0}</style> [4]\nSecond line"
@@ -103,7 +103,7 @@ class SubjectTests(unittest.TestCase):
         from pdf2zh_next.translator.rate_limiter.qps_rate_limiter import QPSRateLimiter
         ai, power = (SUBJECT_PRESETS[k][1] for k in ("ai-ml","electrical-power"))
         calls = []
-        def capture(settings, source, target, text, model, effort, runner, *, prefix):
+        def capture(settings, source, target, text, model, effort, runner, *, prefix, pace):
             calls.append((text, prefix))
             return prefix + "|" + text
         with tempfile.TemporaryDirectory() as work, patch.object(engine_bridge, "translate", capture), \
@@ -124,6 +124,9 @@ class SubjectTests(unittest.TestCase):
             old = CLITranslatorTranslator(config, QPSRateLimiter(1000))
             old.cache.set("legacy", "旧译文")
             self.assertEqual(create("").translate("legacy"), "旧译文")
+            old.add_cache_impact_parameters("codex_subject_v1", hashlib.sha256(
+                f"Use the standard terminology of {ai}.".encode()).hexdigest())
+            old.cache.set("same", "旧领域译文")
             plain_ai = SUBJECT_PRESETS["ai-machine-learning"][1]
             sequence = [("",1),(ai,2),(power,3),(ai,3),("",3),(normalize_subject("  "+ai+"  "),3),
                         (plain_ai,4),(plain_ai,4),(ai,4)]

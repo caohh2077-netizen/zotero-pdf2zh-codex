@@ -207,7 +207,8 @@ class ManagedJobs:
             return {"status":"success", "taskId":job.task, "fileList":[p.name for p in published],
                     "filePaths":list(map(str,published)), "outputDir":str(self.output), "products":products,
                     "fragments":job.fragments.snapshot(), "partial":bool(job.fragments.failed),
-                    "message":job.fragments.message()+" · "+ERRORS.get(job.fragments.error,"片段翻译失败") if job.fragments.failed else ""}
+                    "message":(f"部分完成，{job.fragments.failed} 个片段保留原文 · " +
+                               ERRORS.get(job.fragments.error,"片段翻译失败")) if job.fragments.failed else ""}
         except BaseException:
             for dest in published:
                 dest.unlink(missing_ok=True)

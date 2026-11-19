@@ -9,7 +9,7 @@
 5. 回滚时先正常退出 Zotero，运行 `Rollback.ps1` 并核对 `Doctor.ps1` 和匹配的 XPI。处理中断时，从同一版本包重新运行准备步骤，只有存在就绪标记的目录可以成为活动版本。迁移操作无需修改 Zotero 文献数据库。
 6. 从已提交的源代码运行 `python scripts/build_release.py`。发布任务使用标签对应的 Windows runner 执行测试，生成 ZIP、`SHA256SUMS`、源提交记录和 GitHub 构建证明。构建只读公开目录，打包前扫描凭据格式。使用 GitHub 的 Release 和仓库标签关联同一源码。
 
-故障诊断按顺序检查 `Doctor`、`/health` 和 `managed/state/adapter-events.jsonl`。该日志仅包含时间、错误类别与耗时。`ZPC_LOGIN` 需要在本机重新登录；`ZPC_QUOTA` 请检查订阅额度；`ZPC_NETWORK` 请检查连接和本机系统代理；`ZPC_FORMAT` 表示回答为空或格式占位符异常。修复后运行 `Doctor.ps1` 再试。个别片段失败时，上游可能保留原文，因此验收要抽查新附件的页面内容。
+故障诊断按顺序检查 `Doctor`、`/health` 和 `managed/state/adapter-events.jsonl`。日志通过 `fragmentId` 和 `attempt` 关联同一片段的各次调用。`end.final` 为真时才确定该段的最终结果。`ZPC_LOGIN` 需要在本机重新登录；`ZPC_QUOTA` 请检查订阅额度；`ZPC_NETWORK` 请检查连接和本机系统代理；`ZPC_FORMAT` 表示回答为空或格式占位符异常。修复后运行 `Doctor.ps1` 再试。个别片段失败时，上游可能保留原文，因此验收要抽查新附件的页面内容。
 
 ## 学科领域验收
 

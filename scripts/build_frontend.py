@@ -93,7 +93,20 @@ def patch(p):
         ('            await Zotero.Promise.delay(1000);','            if (!task) onRunning?.({percent:0,message:"正在重新连接…"});\n            await Zotero.Promise.delay(1000);'),
         ('            onProgress?.({ phase: "file-done", fileName, endpoint });','''            const partial = (response as {partial?:boolean;message?:string});
             onProgress?.({ phase: "file-done", fileName, endpoint, detail: partial.partial ? partial.message : undefined });'''),
-        ('        return text;\n    }','        return update.phase === "file-done" && update.detail ? text+" · "+update.detail : text;\n    }'),
+        ('        return text;\n    }','        return update.phase === "file-done" && update.detail ? update.detail+" · "+update.fileName : text;\n    }'),
+        ('    private finishedFiles = new Set<number>();', '''    private finishedFiles = new Set<number>();
+    private partialFiles = new Set<number>();'''),
+        ('            this.window.changeLine({ idx, ...line });','''            this.window.changeLine({ idx, ...line });
+            // Zotero sizes a progress window when its headline changes. Reflow once
+            // after the file and summary lines have been updated and can wrap.
+            if (idx === this.summaryIdx) this.window.changeHeadline(getString("operation-progress-title"));'''),
+        ('        const fileProgress = PDF2zhHelperFactory.jobProgressPercent({','''        if (update.phase === "file-done" && update.detail) this.partialFiles.add(update.current);
+        const fileProgress = PDF2zhHelperFactory.jobProgressPercent({'''),
+        (': update.phase === "file-done"\n', ': update.phase === "file-done" && !this.partialFiles.has(update.current)\n'),
+        ('            text: getString("operation-batch-completed", {','''            text: this.partialFiles.size
+                ? `部分完成 · ${this.partialFiles.size} 个文件含未译片段` + (failed ? ` · ${failed} 个文件失败` : "")
+                : getString("operation-batch-completed", {'''),
+        ('                    : failed > 0\n                      ? "default"', '                    : failed > 0 || this.partialFiles.size > 0\n                      ? "default"'),
     ])
     helper = p/"src/modules/pdf2zhHelper.ts"
     helper.write_text('import {catalog,codexOptions,codexSuffix,fragmentText,importOnce,subjectPreview} from "./codex";\n'+helper.read_text("utf-8"),encoding="utf-8",newline="\n")

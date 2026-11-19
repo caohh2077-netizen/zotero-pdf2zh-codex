@@ -14,7 +14,7 @@ from common import LOCK
 MODEL_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}\Z")
 EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
 LIMIT = 20
-SUBJECT_TEMPLATE = "Use the standard terminology of {field}."
+SUBJECT_TEMPLATE = "As a translator specializing in {field}, choose established terms in the target language that fit the context."
 SUBJECT_PRESETS = {
     "ai-ml": ("人工智能、机器学习与具身智能", "artificial intelligence, machine learning, and embodied AI"),
     "ai-machine-learning": ("人工智能、机器学习", "artificial intelligence and machine learning"),

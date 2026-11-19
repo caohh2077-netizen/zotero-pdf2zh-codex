@@ -9,13 +9,13 @@ import tempfile
 import threading
 import time
 
-from adapter.codex_translate import Failure, classify, instruction, restrictions, validate
+from adapter.codex_translate import Failure, instruction, restrictions, validate
 from common import LOCK
 from winjob import child_tree, resident_slot
 
 
 class Worker:
-    def __init__(self, binary, env, effort):
+    def __init__(self, binary, env, effort, deadline):
         self.stack = ExitStack()
         self.residency = ExitStack()
         self.events = queue.Queue()
@@ -41,16 +41,21 @@ class Worker:
                     self.events.put(None)
             threading.Thread(target=receive, daemon=True).start()
             self.call("initialize", {"clientInfo":{"name":"pdf2zh_codex","title":"PDF2zh","version":LOCK["release"]},
-                                     "capabilities":{"experimentalApi":True}}, time.monotonic()+25)
+                                     "capabilities":{"experimentalApi":True}}, min(deadline, time.monotonic()+25))
             self.send({"method":"initialized"})
         except BaseException:
             self.close()
             raise
 
     def send(self, data):
-        self.writer.write((json.dumps(data, ensure_ascii=False)+"\n").encode("utf-8"))
+        try:
+            self.writer.write((json.dumps(data, ensure_ascii=False)+"\n").encode("utf-8"))
+        except BrokenPipeError:
+            raise Failure("network") from None
 
     def next(self, deadline):
+        if time.monotonic() >= deadline:
+            raise Failure("timeout")
         try:
             row = self.backlog.popleft() if self.backlog else self.events.get(timeout=max(0, deadline-time.monotonic()))
         except queue.Empty:
@@ -112,7 +117,7 @@ class Worker:
             if turn:
                 try:
                     self.send({"id":-1,"method":"turn/interrupt","params":{"threadId":thread,"turnId":turn}})
-                except OSError:
+                except (OSError, Failure):
                     pass
             raise
 
@@ -138,7 +143,7 @@ class Pool:
         worker.close()
 
     @contextmanager
-    def reserve(self, user):
+    def reserve(self, user, *, deadline=None):
         with self.lock:
             if self.closed:
                 raise Failure("failed")
@@ -147,11 +152,11 @@ class Pool:
                 self.idle.pop(worker).cancel()
         with ExitStack() as pending:
             if worker is None:
-                pending.enter_context(resident_slot(user))
+                pending.enter_context(resident_slot(user, deadline=deadline))
             def run(binary, env, source, target, text, deadline, model, effort, prompt=None):
                 nonlocal worker
                 if worker is None:
-                    worker = Worker(binary, env, effort)
+                    worker = Worker(binary, env, effort, deadline)
                     worker.residency = pending.pop_all()
                 return worker.run(model, effort, text, deadline, prompt if prompt is not None else instruction(source, target))
             try:

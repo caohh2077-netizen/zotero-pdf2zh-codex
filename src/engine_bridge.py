@@ -4,6 +4,7 @@ from concurrent.futures import Future
 import os
 from pathlib import Path
 import threading
+import time
 
 from adapter.codex_translate import SLOT, language, translate
 from common import read
@@ -35,11 +36,21 @@ def bind(translator):
         from adapter.appserver import Pool
         runner = Pool()
         atexit.register(runner.close)
-    # Single-flight also retains failed futures until this document exits. A layout
-    # fallback requesting the same failed source cannot send it to the model again.
+    # Duplicate layout requests share all attempts, including the final outcome.
     pending = {}
     lock = threading.Lock()
-    def one_attempt(text, rate_limit_params=None):
+    interval = getattr(translator.rate_limiter, "min_interval", 0)
+    next_start = 0.0
+    def pace():
+        nonlocal next_start
+        with lock:
+            now = time.monotonic()
+            if now < next_start:
+                return next_start - now
+            next_start = now + interval
+            return 0
+
+    def translate_fragment(text, rate_limit_params=None):
         with lock:
             future = pending.get(text)
             owner = future is None
@@ -47,12 +58,12 @@ def bind(translator):
                 future = pending[text] = Future()
         if owner:
             try:
-                result = translate(settings, source, target, text, model, effort, runner, prefix=prefix)
+                result = translate(settings, source, target, text, model, effort, runner, prefix=prefix, pace=pace)
                 future.set_result(result)
             except Exception as error:
                 future.set_exception(error)
         return future.result()
-    translator.do_translate = one_attempt
+    translator.do_translate = translate_fragment
     cached_translate = translator.translate
     def keep_partial(text, ignore_cache=False, rate_limit_params=None):
         try:

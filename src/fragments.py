@@ -7,6 +7,7 @@ class Fragments:
         self.calls = self.failed = 0
         self.dispatched = set()
         self.outcomes = set()
+        self.retrying = set()
         self.error = None
         self.ended = set()
         self.terminal = False
@@ -26,9 +27,14 @@ class Fragments:
             self.calls += 1
             return
         if e.get("event") == "end":
-            if e["id"] in self.outcomes:
+            fragment = e.get("fragmentId", e["id"])
+            if fragment in self.outcomes:
                 return
-            self.outcomes.add(e["id"])
+            if not e.get("final", True):
+                self.retrying.add(fragment)
+                return
+            self.retrying.discard(fragment)
+            self.outcomes.add(fragment)
             if e.get("result") != "ok":
                 self.failed += 1
                 self.error = e.get("result")
@@ -57,7 +63,7 @@ class Fragments:
         cur, size = self.parts.get(self.part, (0, None))
         return {"current":current, "total":total, "part":self.part, "parts":self.count,
                 "partCurrent":cur, "partTotal":size, "failed":self.failed, "calls":self.calls,
-                "stage":self.stage, "error":self.error, "ocr":self.ocr}
+                "stage":self.stage, "error":self.error, "ocr":self.ocr, "retrying":len(self.retrying)}
 
     def message(self):
         f = self.snapshot()
@@ -69,6 +75,8 @@ class Fragments:
             text = f"第 {self.part} / {self.count} 部分 · 本部分 {f['partCurrent']} / {f['partTotal']} · 全篇已处理 {f['current']}"
         else:
             text = f"已处理 {f['current']} / {f['total']} 个片段"
+        if self.retrying:
+            text += f" · {len(self.retrying)} 段正在重试"
         if self.failed:
             text += f" · {self.failed} 个片段失败"
         if self.stage == "typeset":
