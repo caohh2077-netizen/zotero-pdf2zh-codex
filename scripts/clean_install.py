@@ -24,4 +24,5 @@ with tempfile.TemporaryDirectory(prefix="Zotero 安装 ") as folder:
     assert json.loads((state/"active.json").read_text())["active"] is None
     subprocess.run([str(slot/"runtime/Scripts/python.exe"),"-X","utf8",str(ROOT/"scripts/offline_pdf.py"),
                     "--asset-profile",str(slot/"engine-data")],check=True)
+    subprocess.run([str(slot/"runtime/Scripts/python.exe"),"-I","-X","utf8",str(ROOT/"scripts/offline_partial.py"),"--slot",str(slot)],check=True,timeout=300)
     print("Clean-account prepare, repeated install and one-page offline PDF passed")

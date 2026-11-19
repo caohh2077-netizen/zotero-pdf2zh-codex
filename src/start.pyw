@@ -10,6 +10,15 @@ import tempfile
 
 managed=Path(__file__).resolve().parent
 state=managed/"state"
+def pair(chosen, previous):
+    selected = previous if chosen == "legacy" else chosen
+    if not selected or selected == "legacy":
+        return
+    runtime = (managed/"releases"/selected/"runtime/Scripts/pythonw.exe").resolve()
+    if not runtime.is_relative_to((managed/"releases").resolve()):
+        raise ValueError("Invalid runtime")
+    subprocess.run([str(runtime),"-I",str(managed/"pair_frontend.py"),str(managed.parent),chosen],check=True)
+
 def load(name):
     return json.loads((state/name).read_text("utf-8"))
 
@@ -22,6 +31,7 @@ try:
                                  capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW).stdout.lower()
             if b"zotero.exe" not in tasks:
                 chosen=load("pending.json")["active"]
+                pair(chosen,active["active"])
                 with tempfile.NamedTemporaryFile(dir=state,delete=False) as f:
                     f.write(json.dumps({"active":chosen,"previous":active["active"]}).encode())
                     f.flush()
@@ -30,6 +40,10 @@ try:
                 (state/"pending.json").unlink()
                 active=load("active.json")
         name=active["active"]
+        running = subprocess.run(["tasklist","/FI","IMAGENAME eq zotero.exe","/FO","CSV","/NH"],
+                                 capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW).stdout.lower()
+        if b"zotero.exe" not in running:
+            pair(name,active.get("previous"))
         if name=="legacy":
             base=managed.parent
             cmd=[base/"runtime/Scripts/pythonw.exe",base/"pdf2zh-launcher.pyw"]

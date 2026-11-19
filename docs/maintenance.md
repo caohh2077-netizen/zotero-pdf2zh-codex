@@ -10,3 +10,18 @@
 6. 从已提交的源代码运行 `python scripts/build_release.py`。发布任务使用标签对应的 Windows runner 执行测试，生成 ZIP、`SHA256SUMS`、源提交记录和 GitHub 构建证明。构建只读公开目录，打包前扫描凭据格式。使用 GitHub 的 Release 和仓库标签关联同一源码。
 
 故障诊断按顺序检查 `Doctor`、`/health` 和 `managed/state/adapter-events.jsonl`。该日志仅包含时间、错误类别与耗时。`ZPC_LOGIN` 需要在本机重新登录；`ZPC_QUOTA` 请检查订阅额度；`ZPC_NETWORK` 请检查连接和本机系统代理；`ZPC_FORMAT` 表示回答为空或格式占位符异常。修复后运行 `Doctor.ps1` 再试。个别片段失败时，上游可能保留原文，因此验收要抽查新附件的页面内容。
+
+## 0.2 前后端及实验复现
+
+源码在固定的上游提交上构建。运行 `python scripts/build_frontend.py --out rebuilt.xpi` 会校验源码归档，应用 `scripts/build_frontend.py` 和 `compat/frontend/codex.ts` 中的改动，执行 `npm ci`、TypeScript 检查和上游打包，再固定 ZIP 成员顺序和时间。用 `Get-FileHash rebuilt.xpi` 对照兼容清单的 `xpi_sha256`。服务端及翻译器的定点改动见 `src/patch_runtime.py`。源文件摘要或替换位置不匹配时，候选安装会中止。
+
+复用实验 B 在每个片段启动新的临时线程，同一文档内可重用空闲进程。正常翻译默认走 A。Windows 的命名事件为每个正在运行或空闲待用的 Codex 翻译进程保留名额，同一用户跨文档合计最多 20 个。等待名额的时间计入排队。独立测试配置可在启动后端前设置当前 PowerShell 会话的 `$env:ZPC_EXPERIMENT='app-server'`。关闭该测试实例后清除环境变量。两组基准使用相同的合成短句，记录本机在途峰值、成功数、墙钟时间与工作集。只在自己的订阅账户上执行真实基准。
+
+```powershell
+$slot = '已安装候选版本的绝对路径'
+& "$slot\runtime\Scripts\python.exe" -I -X utf8 scripts/benchmark_fragments.py --settings "$slot\settings.json" --live --count 40 --workers 1 10 20 --out benchmark.jsonl
+& "$slot\runtime\Scripts\python.exe" -I -X utf8 scripts/acceptance_v2.py --port 18890 --tessdata "$slot\tessdata" --work .work/acceptance-v2
+& "$slot\runtime\Scripts\python.exe" -I -X utf8 scripts/offline_partial.py --slot "$slot"
+```
+
+`GET /api/codex/capabilities` 提供账户模型与强度。异步提交返回 taskId，`/api/tasks` 与 `/api/history` 的 `fragments` 给出阶段、分子、分母、失败数及调用数。向 `/api/codex/tasks/<taskId>/cancel` 发 POST 可取消该文件。用于诊断的事件只含标识、选项、结果类别和计时。

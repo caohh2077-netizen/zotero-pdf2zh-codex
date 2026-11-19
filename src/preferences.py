@@ -29,7 +29,8 @@ def apply(profile, state, source, target, restore=False):
         snapshot=state/("prefs-"+system_id(profile)+".json")
         values={"engine":"pdf2zh_next","engineSelect":"pdf2zh_next","next_service":"clitranslator",
                 "next_serviceSelect":"clitranslator","new_serverip":"http://127.0.0.1:8890","sourceLang":source,
-                "targetLang":target,"sourceLangSelect":source,"targetLangSelect":target,"qps":1,"poolSize":1,
+                "targetLang":target,"sourceLangSelect":source,"targetLangSelect":target,"qps":10,"poolSize":10,
+                "codexModel":"gpt-6.2-sol","codexEffort":"xhigh","autoOcr":True,
                 "noMono":True,"noDual":False,"mono":False,"dual":True,"disableGlossary":True}
         lines=prefs.read_bytes().decode("utf-8").splitlines(keepends=True)
         known={PREFIX+k for k in values}
@@ -50,6 +51,7 @@ def apply(profile, state, source, target, restore=False):
                     continue
                 new=previous["before"].get(name) or ""
             else:
+                previous["before"].setdefault(name,old)
                 previous["set"][name]=new
             if idx is None:
                 lines.append(new)

@@ -16,7 +16,7 @@ if __name__=="__main__":
     args=p.parse_args()
     s=read(PKG.parent/"settings.json")
     try:
-        compatible(args.profile or default_profile(),Path(s["zotero"]))
+        compatible(args.profile or default_profile(),Path(s["zotero"]),preparing=True)
         binary=Path(s["codex"])
         if not binary.is_file() and shutil.which("codex.exe"):
             binary=Path(shutil.which("codex.exe"))

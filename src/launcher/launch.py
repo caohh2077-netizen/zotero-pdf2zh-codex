@@ -41,7 +41,7 @@ def default_profile():
     return (base/selected["Path"]).resolve() if selected.get("IsRelative") == "1" else Path(selected["Path"])
 
 
-def compatible(profile, zotero):
+def compatible(profile, zotero, preparing=False):
     ini = configparser.ConfigParser(interpolation=None, strict=False)
     ini.read(zotero.parent/"app/application.ini", encoding="utf-8-sig")
     if not ini.has_option("App", "Version"):
@@ -53,8 +53,8 @@ def compatible(profile, zotero):
         ext = next(a for a in read(profile/"extensions.json")["addons"] if a["id"]==EXTENSION)
     except (OSError, KeyError, StopIteration):
         raise RuntimeError("Install and enable the supplied PDF2zh XPI in this Zotero profile.") from None
-    if not ext.get("active") or ext["version"] != LOCK["server_version"]:
-        raise RuntimeError("The enabled PDF2zh XPI must match "+LOCK["server_version"])
+    if not ext.get("active") or ext["version"] not in ({LOCK["xpi_version"],LOCK["server_version"]} if preparing else {LOCK["xpi_version"]}):
+        raise RuntimeError("The enabled PDF2zh XPI must match "+LOCK["xpi_version"])
 
 
 def engine_env(slot):
@@ -131,6 +131,9 @@ def run(slot, settings, port, profile, owner_pid=None):
             if probe.connect_ex(("127.0.0.1",port))==0:
                 raise RuntimeError(f"Port {port} is occupied by another program.")
         exe=Path(settings["zotero"])
+        if not owner_pid and not window_owner(exe,profile):
+            from pair_frontend import pair
+            pair(Path(settings["root"]),slot.name,profile or default_profile())
         pid=owner_pid or open_window(exe,profile)
         if not owner_pid:
             selected=profile or default_profile()
@@ -163,6 +166,7 @@ def run(slot, settings, port, profile, owner_pid=None):
                         except (OSError,ValueError):
                             continue
                         if (data.get("status")!="ok" or data.get("version")!=LOCK["server_version"]
+                                or data.get("codexProtocol") != LOCK["protocol"]
                                 or Path(data.get("outputDir","")).resolve()!=(server/"translated").resolve()):
                             raise RuntimeError("Unexpected server health response.")
                         break

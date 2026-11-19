@@ -52,6 +52,8 @@ def main():
     payload={"engine":"pdf2zh_next","next_service":"clitranslator","fileName":f"Codex-probe-{int(time.time())}.pdf",
              "fileContent":content,"sourceLang":"en","targetLang":"zh-CN","qps":1,"poolSize":1,"noMono":True,
              "noDual":False,"dual":True,"mono":False,"disableGlossary":True,"asyncJob":True}
+    if health.get("codexProtocol")==2:
+        payload.update(qps=10,poolSize=10,codex={"protocol":2,"model":"gpt-6.2-sol","effort":"xhigh"})
     req=Request(base+"/translate",data=json.dumps(payload).encode(),headers={"Content-Type":"application/json"})
     with opener.open(req,timeout=15) as r:
         result=json.load(r)

@@ -36,7 +36,11 @@ def build(out):
             contents=subprocess.check_output(["git","-C",str(ROOT),"show",f"{commit}:{rel}"])
             info=zipfile.ZipInfo(rel,(2026,1,1,0,0,0))
             z.writestr(info,contents,compress_type=zipfile.ZIP_DEFLATED)
-    (out/"SHA256SUMS").write_text(digest(out/name)+"  "+name+"\n",encoding="ascii")
+    paired = out / ("zotero-pdf2zh-codex-"+version+".xpi")
+    paired.write_bytes((ROOT/"compat/pdf2zh-codex.xpi").read_bytes())
+    if digest(paired) != LOCK["xpi_sha256"]:
+        raise ValueError("Release XPI does not match the manifest")
+    (out/"SHA256SUMS").write_text("".join(digest(p)+"  "+p.name+"\n" for p in [out/name,paired]),encoding="ascii")
     (out/"build-source.json").write_text(json.dumps({"repository":LOCK["repository"],"commit":commit,"upstream":LOCK["commit"],
                                                      "version":version},indent=2)+"\n",encoding="utf-8")
     print(out/name)

@@ -20,6 +20,7 @@ import zipfile
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from common import LOCK, PKG, atomic, digest, read, save, slot_path
 from wheels import fetch
+import patch_runtime
 
 ASSET_URL = f"https://github.com/{LOCK['upstream']}/releases/download/{LOCK['tag']}"
 DEFAULT = Path(os.environ["LOCALAPPDATA"])/"Zotero-PDF2zh-Codex"
@@ -104,9 +105,9 @@ def configure(slot,source,target):
     data=(path if path.exists() else template).read_text("utf-8-sig")
     command=(f'"{(slot/"runtime/Scripts/python.exe").as_posix()}" -I -X utf8 '
              f'"{(slot/"pkg/src/adapter/codex_translate.py").as_posix()}" --source {source} --target {target} '
-             f'--prompt-version 1 --model {LOCK["model"]}')
+             f'--prompt-version 1 --model {LOCK["model"]} --effort {LOCK["effort"]}')
     section=("[clitranslator_detail]\ntranslate_engine_type = \"CLITranslator\"\nclitranslator_command = "+
-             json.dumps(command,ensure_ascii=False)+"\nclitranslator_timeout = 150\n\n")
+             json.dumps(command,ensure_ascii=False)+"\nclitranslator_timeout = 300\n\n")
     changed,count=re.subn(r"(?ms)^\[clitranslator_detail\][^\n]*\n.*?(?=^\[|\Z)",lambda _:section,data)
     if count!=1:
         raise ValueError("Unsupported upstream CLITranslator template")
@@ -160,6 +161,15 @@ def install(root,args):
             subprocess.run([str(python),"-m","pip","--disable-pip-version-check","install","--quiet","--no-index","--no-compile",
                             "--only-binary=:all:","--no-deps","--require-hashes","--find-links",str(wheelhouse),
                             "-r",str(PKG/"locks/windows-x64-py312.txt")],check=True)
+            patch_runtime.install(slot)
+            if digest(PKG/"compat/pdf2zh-codex.xpi") != LOCK["xpi_sha256"]:
+                raise ValueError("Paired XPI digest mismatch")
+            ocr = LOCK["ocr"]
+            trained = cache/"eng.traineddata"
+            download("https://raw.githubusercontent.com/tesseract-ocr/tessdata_fast/"+ocr["commit"]+"/eng.traineddata",
+                     trained,ocr["eng_sha256"])
+            (slot/"tessdata").mkdir(exist_ok=True)
+            shutil.copyfile(trained,slot/"tessdata/eng.traineddata")
             # The official wheel metadata contains a verified asset inventory.
             current=read(state/"active.json") if (state/"active.json").exists() else {}
             previous=current.get("active")
@@ -181,6 +191,7 @@ def install(root,args):
         save(state/"candidate.json",{"id":name})
         if not (state/"active.json").exists():
             save(state/"active.json",{"active":"legacy" if (root/"pdf2zh-launcher.pyw").exists() else None,"previous":None})
+        atomic(managed/"pair_frontend.py",(PKG/"src/pair_frontend.py").read_bytes())
         atomic(managed/"start.pyw",(PKG/"src/start.pyw").read_bytes())
         print("Candidate ready:",slot)
     return slot
@@ -210,6 +221,10 @@ def active_switch(root,dest,slot=None):
         return
     running=subprocess.run(["tasklist","/FI","IMAGENAME eq zotero.exe","/FO","CSV","/NH"],capture_output=True,
                            creationflags=subprocess.CREATE_NO_WINDOW).stdout.lower()
+    if b"zotero.exe" not in running:
+        chosen = current.get("active") if dest == "legacy" else dest
+        if chosen and chosen != "legacy":
+            runtime(slot_path(root,chosen),PKG/"src/pair_frontend.py",root,dest)
     if dest!="legacy":
         shortcut(root,slot or target)
     elif b"zotero.exe" not in running and current.get("active") and current["active"]!="legacy":

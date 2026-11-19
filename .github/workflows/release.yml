@@ -18,6 +18,11 @@ jobs:
         run: |
           $v = python -c "import tomllib; print(tomllib.load(open('compat/upstream.lock.toml','rb'))['release'])"
           if ($env:GITHUB_REF_NAME -ne "v$v") { throw 'Tag does not match release manifest' }
+      - name: Verify paired XPI from pinned TypeScript sources
+        shell: pwsh
+        run: |
+          python -X utf8 scripts/build_frontend.py --out "$env:RUNNER_TEMP/rebuilt.xpi"
+          if ((Get-FileHash "$env:RUNNER_TEMP/rebuilt.xpi").Hash -ne (Get-FileHash compat/pdf2zh-codex.xpi).Hash) { throw 'XPI reproduction mismatch' }
       - run: ./scripts/Bootstrap-Dev.ps1
       - run: ./scripts/Test.ps1 -Suite Offline
       - run: ./scripts/Test.ps1 -Suite Lifecycle
@@ -25,7 +30,9 @@ jobs:
       - run: python scripts/build_release.py
       - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
         with:
-          subject-path: 'dist/*.zip'
+          subject-path: |
+            dist/*.zip
+            dist/*.xpi
       - shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
