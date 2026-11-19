@@ -147,6 +147,7 @@ def run(slot, settings, port, profile, owner_pid=None):
                     time.sleep(.2)
         owner=win32api.OpenProcess(win32con.SYNCHRONIZE,False,pid)
         keyfile=state/f"session-{port}.json"
+        verified_listener=False
         try:
             with open(os.devnull,"rb") as inp, open(os.devnull,"wb") as out:
                 server=slot/"server"
@@ -172,12 +173,28 @@ def run(slot, settings, port, profile, owner_pid=None):
                         break
                     else:
                         raise RuntimeError("Backend health check timed out.")
+                    verified_listener=True
                     save(keyfile,{"backend_pid":cpid,"owner_pid":pid,"slot":slot.name,"port":port})
                     if event.WaitForMultipleObjects([owner,child],False,event.INFINITE)==1:
                         raise RuntimeError("Backend stopped unexpectedly.")
         finally:
             owner.Close()
-            keyfile.unlink(missing_ok=True)
+            try:
+                if verified_listener:
+                    # Winsock can briefly accept a connection after the last
+                    # process has exited. Keep the launcher mutex until a new
+                    # instance will see the port released.
+                    deadline=time.monotonic()+3
+                    while time.monotonic()<deadline:
+                        with socket.socket() as probe:
+                            probe.settimeout(.2)
+                            if probe.connect_ex(("127.0.0.1",port))!=0:
+                                break
+                        time.sleep(.03)
+                    else:
+                        raise RuntimeError(f"Port {port} is still occupied after the backend exited.")
+            finally:
+                keyfile.unlink(missing_ok=True)
 
 
 def main():
