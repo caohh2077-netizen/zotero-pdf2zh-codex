@@ -10,6 +10,8 @@
 
 ### 1. 下载 Python、插件和 Codex
 
+已有 Python 的用户可先在 PowerShell 运行 `python -VV`。输出同时包含 `3.12.10` 和 `64 bit (AMD64)`，就可以跳过下表的 Python 安装。v0.3.0 安装器会核对完整版本号，包括末尾的 `.10`。
+
 | 下载什么 | 接下来做什么 |
 | --- | --- |
 | [Python 3.12.10（64 位）](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) | 运行安装程序，勾选 **Add python.exe to PATH**，完成安装。 |
