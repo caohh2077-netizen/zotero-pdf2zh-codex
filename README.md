@@ -1,48 +1,124 @@
 # Zotero PDF2zh × Codex
 
-在 Windows 上从 Zotero 右键生成中英双语 PDF，使用已登录的官方 Codex CLI 和自己的 ChatGPT 订阅。打开桌面「Zotero 全文翻译」会启动本机后端；退出 Zotero 时，本次后端和翻译进程一起退出。PDF 的待译片段会发送到 OpenAI，使用量计入自己的订阅。
+在 Windows 的 Zotero 里右键一篇英文论文，用自己的 ChatGPT 账户生成左侧英文、右侧简体中文的双语 PDF。原文和译文都保存在文献库中。PDF 拆分和排版在本机完成，待译片段会通过 Codex 发给 OpenAI，使用量计入你的 Codex 额度。使用订阅翻译无需填写 API Key。
 
-![自编单页论文的真实双语输出，英文在左、中文在右](docs/bilingual.png)
+[下载 v0.3.0 Windows 安装包](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/releases/download/v0.3.0/zotero-pdf2zh-codex-0.3.0-windows-x64.zip) · [首次安装](#首次安装) · [翻译第一篇文献](#翻译第一篇文献) · [与上游的功能对比](#与上游的功能对比)
 
-## 安装
+## 首次安装
 
-1. 准备 Windows x64、Zotero **10.0.8**、64 位 CPython **3.12.10** 和官方 Codex CLI **0.169.0-alpha.11.1**。在终端执行 `codex login`，选择 ChatGPT 账户，然后运行 `codex login status`。默认选择 `gpt-6.2-sol / xhigh`，模型目录来自本机登录的 Codex。[Codex 登录说明](https://developers.openai.com/codex/auth/)
-2. 打开本项目 [Releases](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/releases)，下载同一版本的 Windows ZIP、`SHA256SUMS` 和 `build-source.json`。用下方命令校验，再解压到自己的目录。首次准备约 330 MB 的 Python wheels 和约 352 MB 的字体、布局模型等资源，另需官方 Server 与 XPI；预留 4 GB 空间。
-3. 运行 `.\Install.ps1 -PrepareOnly`。首次安装请在 Zotero「工具 → 插件」中安装解压目录内的 `compat\pdf2zh-codex.xpi`。已启用官方 4.1.8 的配置可以直接升级。退出 Zotero 后运行 `.\Activate.ps1` 和 `.\Use-Codex.ps1`。下次通过桌面快捷方式启动时会配对前后端。
-4. 双击桌面「Zotero 全文翻译」。在 PDF 或其父条目上右键，选择 **PDF2zh → PDF2zh: 翻译PDF**。译文会作为新附件放回条目。最小化可继续翻译，退出 Zotero 会取消未完成的任务。
+适用于 **Windows x64、Zotero 10.0.8**，需要一个可使用 Codex 的 ChatGPT 账户。先在 Zotero 的「帮助 → 关于 Zotero」核对版本，并预留约 **4 GB** 磁盘空间。首次安装需要联网下载翻译引擎、字体和版面模型。[支持的版本](compat/upstream.lock.toml) · [Zotero 10.0.8 官方 Windows 安装包](https://download.zotero.org/client/release/10.0.8/Zotero-10.0.8_x64_setup.exe)
 
-**获取指定 Codex 版本。** 已安装 Codex 桌面端的用户可用 `codex --version` 核对版本。也可从官方发布页下载 `codex-x86_64-pc-windows-msvc.exe`，用 `Get-FileHash` 对照 SHA-256 `a473edef0d52c4ffa067060ddd48a3d85720a3256cbd0510aab71d406f3af744`，将文件命名为 `codex.exe`。从该目录运行 `.\codex.exe login`，然后给安装脚本传 `-CodexPath` 和此文件的完整路径。[下载官方 Windows CLI](https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.11.1)
+### 1. 下载 Python、插件和 Codex
+
+| 下载什么 | 接下来做什么 |
+| --- | --- |
+| [Python 3.12.10（64 位）](https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe) | 运行安装程序，勾选 **Add python.exe to PATH**，完成安装。 |
+| [本项目的 Windows ZIP](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/releases/download/v0.3.0/zotero-pdf2zh-codex-0.3.0-windows-x64.zip) | 右键 ZIP →「全部解压」，放到一个准备长期保留的文件夹。打开能同时看到 `Install.ps1`、`compat`、`src` 的那一层。插件文件已包含在 `compat` 里。 |
+| [官方 Codex CLI 0.169.0-alpha.11.1（Windows x64）](https://github.com/openai/codex/releases/download/rust-v0.169.0-alpha.11.1/codex-x86_64-pc-windows-msvc.exe) | 把下载的 `codex-x86_64-pc-windows-msvc.exe` 放在 **`Install.ps1` 旁边**。这是翻译时实际使用的程序，安装后请保留在原处。 |
+
+<details>
+<summary>核对下载文件的 SHA-256</summary>
+
+在下载文件所在文件夹打开 PowerShell，运行 `Get-FileHash .\文件名 -Algorithm SHA256`，把「文件名」换成实际下载的文件名。Windows ZIP 的校验值见同版 `SHA256SUMS`，Codex 可执行文件的校验值为 `a473edef0d52c4ffa067060ddd48a3d85720a3256cbd0510aab71d406f3af744`。已安装 GitHub CLI 的用户还可以核验 ZIP 的构建来源。[本项目发布页](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/releases/tag/v0.3.0) · [Codex 官方发布页](https://github.com/openai/codex/releases/tag/rust-v0.169.0-alpha.11.1)
 
 ```powershell
-Get-FileHash .\zotero-pdf2zh-codex-0.3.0-windows-x64.zip -Algorithm SHA256
-# 与同一 Release 的 SHA256SUMS 对照。安装 GitHub CLI 的用户还可以核验构建来源：
 gh attestation verify .\zotero-pdf2zh-codex-0.3.0-windows-x64.zip --repo caohh2077-netizen/zotero-pdf2zh-codex
 ```
 
-默认安装在 `%LOCALAPPDATA%\Zotero-PDF2zh-Codex`。使用现有目录时，给 **准备、激活及首次配置** 传相同的 `-InstallRoot`。自定义路径示例：
+</details>
+
+### 2. 登录自己的 ChatGPT 账户
+
+在刚才看到 `Install.ps1` 的文件夹中，点一下文件资源管理器的**地址栏**，输入 `powershell` 并回车。后面的命令都在这个窗口逐行执行。
 
 ```powershell
-.\Install.ps1 -PrepareOnly -InstallRoot 'D:\APP\Zotero-PDF2zh' -PythonPath 'D:\APP\Python\python.exe' -ZoteroPath 'D:\APP\Zotero\zotero.exe' -CodexPath (Get-Command codex.exe).Source
-.\Activate.ps1 -InstallRoot 'D:\APP\Zotero-PDF2zh' -PythonPath 'D:\APP\Python\python.exe'
-.\Use-Codex.ps1 -InstallRoot 'D:\APP\Zotero-PDF2zh' -PythonPath 'D:\APP\Python\python.exe'
+Rename-Item -LiteralPath .\codex-x86_64-pc-windows-msvc.exe -NewName codex.exe
+python --version
+.\codex.exe --version
 ```
 
-打开「编辑 → 设置 → PDF2zh」，选择 `pdf2zh_next` 和「Codex（本机订阅）」。模型与思考强度可单独选择，点击「刷新模型」可读取当前账户的目录。默认使用 Sol、xhigh 和 10 个 Worker。Worker 可设 1–20，设为 0 时跟随 QPS，最高 20。QPS 限制启动频率，同一用户的并发上限为 20。每份 PDF 使用提交时的选项，双语附件名以 `__gpt-6.2-sol__xhigh.pdf` 等后缀结尾。
+后两条命令应分别显示 `Python 3.12.10` 和 `codex-cli 0.169.0-alpha.11.1`。接下来执行 `login`，在浏览器里用自己的 ChatGPT 账户登录。回到 PowerShell，运行 `login status` 应看到 `Logged in using ChatGPT`。[Codex 官方登录说明](https://developers.openai.com/codex/auth/)
 
-在思考强度下面的「学科领域」选择通用、11 个预设之一，或输入自己的中英文学科名称。第一项学科预设为「人工智能、机器学习与具身智能」，第二项为「人工智能、机器学习」。选择后可预览对应的英文首句。通用直接使用原提示词。一次右键操作中的所有文件共用提交时的领域，译文缓存按实际首句区分。
+```powershell
+.\codex.exe login
+.\codex.exe login status
+```
 
-右下角浮窗按文件显示实际段落进度。单段失败会保留该段原文及其余成功译文，并显示失败数。同一任务每段只发起一次 Codex 调用。CLI 可以在该调用内恢复连接，单段模型预算为 600 秒，等候并发槽位单独计时。再次主动翻译时可复用相同语言、模型、强度及提示词版本的已成功片段。自动 OCR 随包校验英文字库。
+### 3. 在 Zotero 安装插件
 
-若 Windows PowerShell 限制本地脚本，可以从解压目录直接运行同一 Python 入口，例如 `python -I src/manage.py prepare`、`python -I src/manage.py activate`、`python -I src/manage.py use-codex`。自定义安装目录通过 `--root` 指定。
+打开 Zotero 的 **工具 → 插件**，把解压目录里的 **`compat\pdf2zh-codex.xpi`** 拖进插件管理器，确认安装。看到 **PDF2zh 4.1.8.3** 已启用后，从 **文件 → 退出** 完全关闭 Zotero，以便安装程序写入翻译设置。
 
-## 更新与恢复
+### 4. 安装翻译引擎，生成桌面快捷方式
 
-- `Doctor.ps1` 核对 Zotero、插件、CLI 和 ChatGPT 登录，显示当前语言。更换 Codex 安装路径后可重新准备版本，或在 PATH 上提供匹配的官方 CLI。
-- `Set-Language.ps1 -Source en -Target de` 配置翻译命令，随后把 Zotero 的目标语言也可改成 `de`。0.2 的托管路径直接读取每份任务的源语言和目标语言。
-- `Update.ps1 -Version 版本号` 从本仓库官方 Release 校验和准备版本。`Rollback.ps1` 选择上一个可用版本。`Use-Codex.ps1 -Restore` 可恢复此前保存的 PDF2zh 选项。桌面入口在所选配置关闭后配对相应 XPI；首次旧版的原始安装包保留在已校验的下载缓存。
-- `Candidate.ps1 -Profile 测试配置绝对路径` 创建测试入口，使用 `18890`；在该 Zotero 测试配置中将 PDF2zh 后端地址设为 `http://127.0.0.1:18890`。日常服务只监听 `127.0.0.1:8890`。上游版本变化不会自动改动运行环境。
+回到刚才的 PowerShell。先运行第一条，等它完成后再运行第二条。
 
-## 开发者复现
+```powershell
+python -I -X utf8 .\src\manage.py install --codex .\codex.exe
+python -I -X utf8 .\src\manage.py use-codex
+```
+
+第一条会下载并校验依赖、激活后端，在桌面创建 **Zotero 全文翻译**。第二条显示 `PDF2zh now uses clitranslator.` 就表示已选好 **Codex（本机订阅）**，可以开始翻译。默认从英语译为简体中文，生成双语附件。后端的默认安装目录是 `%LOCALAPPDATA%\Zotero-PDF2zh-Codex`。
+
+## 翻译第一篇文献
+
+1. 双击桌面的 **Zotero 全文翻译**。如果 Zotero 已经打开，也可以直接双击这个快捷方式启动后端。
+2. 第一次使用时，打开 **编辑 → 设置 → PDF2zh**。确认「翻译引擎」为 `pdf2zh_next`，「翻译服务」为 **Codex（本机订阅）**，在 `http://127.0.0.1:8890` 旁点 **检查连接**。默认模型是 **GPT-6.2-Sol / xhigh**。若提示账号不支持，点「刷新模型」，选择列表中可用的模型和思考强度。
+3. 把一份英文 PDF 拖进「我的文库」，或选中已有的本地 PDF 附件。右键 PDF 或带附件的文献条目，选 **PDF2zh → 翻译PDF**。右下角会先显示版面分析，随后显示「已处理 / 总片段数」。
+4. 完成后展开原文献条目，打开新增的双语 PDF。独立导入的 PDF 会在原分类中得到新附件。默认英文在左、中文在右，磁盘文件名末尾带有 `__gpt-6.2-sol__xhigh.pdf` 这样的标记。
+
+最小化 Zotero 可以继续翻译。退出 Zotero 会停止本次后端及翻译子进程，进行中的翻译会取消。
+
+![同一篇单页论文的实际输出，英文原文在左，中文译文在右](docs/bilingual.png)
+
+## 与上游的功能对比
+
+以下对照本项目实际采用的 **zotero-pdf2zh v4.1.8** 和 **本项目 v0.3.0 的 Codex 翻译模式**。Zotero 右键翻译、PDF 排版、双语附件和 OCR 的基础能力均来自上游。[上游项目](https://github.com/guaguastandup/zotero-pdf2zh) · [对照版本的说明](https://github.com/guaguastandup/zotero-pdf2zh/blob/5dd2eaf019f71266764c269bbd2104b559ae95cf/README.md)
+
+| 对比项 | 上游 zotero-pdf2zh v4.1.8 | 本项目 Zotero PDF2zh × Codex v0.3.0 |
+| --- | --- | --- |
+| **平台与翻译引擎** | 提供 Windows、macOS、Linux 和 Docker 部署方式，可选 PDF2ZH 或 PDF2ZH Next | 已验证 Windows x64 和 Zotero 10.0.8，通过 PDF2ZH Next 调用本机 Codex CLI |
+| **翻译服务与登录** | 可选 DeepSeek、OpenAI、Ollama 等服务，按服务配置账号、密钥或本机地址 | ✅ 新增「Codex（本机订阅）」，使用自己的 ChatGPT 账户 |
+| **模型与思考强度** | 在各服务的 LLM 配置里选模型，按服务支持设置思考参数 | ✅ 直接读取当前 Codex 账户的模型列表，可选该模型支持的思考强度 |
+| **学科与术语** | PDF2ZH Next 支持术语表及自动提取，具体取决于翻译服务 | ✅ 11 个学科预设或自定义名称，可预览加在原提示词前的首句，译文按领域分别缓存 |
+| **进度与失败片段** | 提供后台任务、文件进度和百分比，个别失败段可能保留原文 | ✅ 新增已处理片段数、总数及失败数，保留已成功的译段 |
+| **并发与模型调用** | 已有 QPS 和 Worker 数设置，可按服务配额调整 | 默认 10 个 Worker，同一用户跨文档合计最多 20 个。跳过启动时的 `Hello` 试译 |
+| **双语附件与命名** | ✅ 将译文作为新附件导入，支持双语排版和自动 OCR | ✅ 保留双语附件和自动 OCR，另在文件名标明实际模型和思考强度 |
+| **启动与退出** | 单独启动翻译服务，也提供自建一键启动脚本的示例 | ✅ 双击「Zotero 全文翻译」同时启动 Zotero 和后端，退出 Zotero 时回收相关进程 |
+| **更新与回退** | 发布配套 XPI 和 Server，支持检查上游更新 | 固定上游及依赖版本，插件与后端配对升级，可切回上一个已安装版本 |
+
+**选择学科。** 在 PDF2zh 设置的「思考强度」下方选择「学科领域」。前两个预设依次是「人工智能、机器学习与具身智能」和「人工智能、机器学习」。也可以选「通用」或填写中英文学科名称。同一次右键提交的文献使用同一个领域。
+
+**10 个 Worker 怎样翻译一篇论文？** 最多同时翻译 10 段。比如一个 Worker 做完第 1 段后，就可以接下一段。默认每个需要翻译的片段都会启动一个后台 Codex 进程，并用独立的临时对话翻译。QPS 控制每秒能发起多少次请求，Worker 数设为 0 时跟随 QPS，最多 20 个。
+
+**再次翻译同一篇论文。** 原文、语言、模型、思考强度和提示词配置相同的片段可以直接取用本机已缓存的译文。同一任务中，每个片段最多提交一次，CLI 可在该次调用内恢复连接。单次模型调用的超时为 600 秒，排队时间另计。[并发实验与术语盲评结果](docs/release.md)
+
+## 常见问题
+
+- **找不到 Python 或 Zotero。** 安装 Python 后重新打开 PowerShell，再运行 `python --version`。若 Zotero 装在自选位置，在第 4 步 `install` 命令末尾加 `--zotero "你的 Zotero 文件夹\zotero.exe"`，替换为实际完整路径。
+- **安装依赖时报 `WinError 206`（文件名或扩展名太长）。** 回到第 4 步的 PowerShell，用较短的目录重新安装。下面两条命令会将后端安装到自己用户目录下的 `ZPC` 文件夹。
+
+  ```powershell
+  python -I -X utf8 .\src\manage.py install --codex .\codex.exe --root "$env:USERPROFILE\ZPC"
+  python -I -X utf8 .\src\manage.py use-codex --root "$env:USERPROFILE\ZPC"
+  ```
+
+- **插件已装好，右键没有翻译菜单。** 在「工具 → 插件」确认 PDF2zh 4.1.8.3 已启用，通过「Zotero 全文翻译」重开 Zotero，再选本机可以打开的 PDF 或带 PDF 附件的条目。
+- **检查连接失败，或模型列表为空。** 先双击桌面翻译快捷方式，核对地址 `http://127.0.0.1:8890`。连接成功后若列表仍为空，再检查 `.\codex.exe login status` 并点「刷新模型」。安装后可在解压目录运行 `python -I -X utf8 .\src\manage.py doctor` 查看诊断结果。
+
+<details>
+<summary>已有安装、自选路径、更新和恢复</summary>
+
+- 已安装匹配版本的 `codex.exe` 时，可直接使用它登录，并将第 4 步 `--codex` 后的路径改为该程序的完整路径。已启用上游官方 4.1.8 XPI 的用户可正常退出 Zotero，从第 4 步配对升级。
+- 自选安装目录时，给第 4 步的两条命令都加上 `--root "D:\Apps\Zotero-PDF2zh"`。也可用发布包中的 PowerShell 入口 `Install.ps1 -PrepareOnly`、`Activate.ps1` 和 `Use-Codex.ps1`，三步使用同一个 `-InstallRoot`。
+- 更新使用 `.\Update.ps1 -Version 版本号`，将版本号替换为目标 Release 的数字版本。需要回退时，先退出 Zotero，再运行 `.\Rollback.ps1`。`.\Use-Codex.ps1 -Restore` 可在 Zotero 关闭时恢复之前保存的翻译设置。
+- 翻译其他语言时，在 Zotero 的 PDF2zh 设置中更改源语言和目标语言。单独测试新版本可用 `Candidate.ps1 -Profile 测试配置绝对路径` 建立测试快捷方式和 `18890` 端口。[维护和回滚说明](docs/maintenance.md)
+
+</details>
+
+<details>
+<summary>从源码复现</summary>
+
+以下命令在装有 Git 和 Python 3.12.10 x64 的 Windows 机器上运行。
 
 ```powershell
 git clone --branch v0.3.0 https://github.com/caohh2077-netizen/zotero-pdf2zh-codex.git
@@ -53,8 +129,10 @@ cd zotero-pdf2zh-codex
 .\.venv-dev\Scripts\python.exe -X utf8 scripts/offline_pdf.py
 ```
 
-`offline_pdf.py` 首次运行需准备上游资源，可用 `--asset-profile 已有engine-data目录` 复用经过摘要校验的文件。翻译部分使用假 CLI，CI 不需要个人登录。测试覆盖文本契约、配置保留、错误和超时、端口占用及进程树回收。实际测试记录与维护流程见 [验收记录](docs/release.md) 和 [维护说明](docs/maintenance.md)。
+单页离线测试使用模拟 CLI。首次运行需准备上游资源，已有资源可通过 `--asset-profile` 复用。[Windows 验收工作流](https://github.com/caohh2077-netizen/zotero-pdf2zh-codex/actions/workflows/test.yml) · [构建、同步上游与回滚步骤](docs/maintenance.md)
 
-**English.** Install the tested Windows components, sign in with `codex login` using ChatGPT, then run `Install.ps1 -PrepareOnly`. Enable the paired XPI from the same release. Close Zotero, run `Activate.ps1` and `Use-Codex.ps1`, then use the desktop shortcut and the PDF2zh context menu. The original PDF is retained. Each user needs their own eligible subscription.
+</details>
 
-本项目使用 AGPL-3.0。原版插件及后端来自 [guaguastandup/zotero-pdf2zh](https://github.com/guaguastandup/zotero-pdf2zh)，文本接口来自 [PDFMathTranslate-next](https://github.com/PDFMathTranslate-next/PDFMathTranslate-next)，排版由 [BabelDOC](https://github.com/funstory-ai/BabelDOC) 提供。官方软件及其运行资源按各自许可从来源下载。测试论文为本项目自编，文本与夹具生成的样本采用 CC0。
+**English quick start.** On Windows x64, use Zotero 10.0.8, Python 3.12.10 x64 and the pinned Codex CLI. Extract the Windows release ZIP, place the CLI beside `Install.ps1` as `codex.exe`, and sign in with `.\codex.exe login` using ChatGPT. Install `compat\pdf2zh-codex.xpi` through Zotero’s Plugins window and quit Zotero. From the extracted folder run `python -I -X utf8 .\src\manage.py install --codex .\codex.exe`, then `python -I -X utf8 .\src\manage.py use-codex`. Open the **Zotero 全文翻译** desktop shortcut and right-click a PDF to translate it.
+
+本项目使用 AGPL-3.0。Zotero 插件与后端来自 zotero-pdf2zh，翻译引擎和排版分别来自 PDFMathTranslate-next 与 BabelDOC。运行资源依各自许可从原始来源下载，自编测试样稿采用 CC0。[许可证](LICENSE) · [zotero-pdf2zh](https://github.com/guaguastandup/zotero-pdf2zh) · [PDFMathTranslate-next](https://github.com/PDFMathTranslate-next/PDFMathTranslate-next) · [BabelDOC](https://github.com/funstory-ai/BabelDOC)
