@@ -48,7 +48,7 @@ def mutex(name, milliseconds=0):
 
 
 @contextmanager
-def child_tree(argv, env, cwd, stdin, stdout, stderr):
+def child_tree(argv, env, cwd, stdin, stdout, stderr, *, wait_for_tree=False):
     job = win32job.CreateJobObject(None, "Local\\ZPC.job." + uuid.uuid4().hex)
     process = thread = None
     try:
@@ -78,12 +78,23 @@ def child_tree(argv, env, cwd, stdin, stdout, stderr):
             raise
         yield process, pid
     finally:
-        job.Close()
-        if thread:
-            thread.Close()
-        if process:
-            event.WaitForSingleObject(process, 3000)
-            process.Close()
+        try:
+            if wait_for_tree and process:
+                accounting = win32job.JobObjectBasicAccountingInformation
+                if win32job.QueryInformationJobObject(job, accounting)["ActiveProcesses"]:
+                    win32job.TerminateJobObject(job, 1)
+                    deadline = time.monotonic()+10
+                    while win32job.QueryInformationJobObject(job, accounting)["ActiveProcesses"]:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError("The backend process tree did not exit in time.")
+                        time.sleep(.02)
+        finally:
+            job.Close()
+            if thread:
+                thread.Close()
+            if process:
+                event.WaitForSingleObject(process, 3000)
+                process.Close()
 
 
 @contextmanager

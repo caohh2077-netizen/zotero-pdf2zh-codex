@@ -29,7 +29,7 @@ def command(slot, source, target, model, effort):
 
 class Job:
     def __init__(self, directory, selection, title, original, task):
-        self.directory = directory
+        self.directory = directory.resolve()
         self.selection = selection
         self.title = title
         self.original = original

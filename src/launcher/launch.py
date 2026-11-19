@@ -152,7 +152,7 @@ def run(slot, settings, port, profile, owner_pid=None):
                 server=slot/"server"
                 cmd=[slot/"runtime/Scripts/python.exe","-u",server/"server.py","--host","127.0.0.1","--port",str(port),
                      "--enable_venv=False","--check_update=False","--update_source=github"]
-                with child_tree(cmd,engine_env(slot),server,inp,out,out) as (child,cpid):
+                with child_tree(cmd,engine_env(slot),server,inp,out,out,wait_for_tree=True) as (child,cpid):
                     deadline=time.monotonic()+80
                     while time.monotonic()<deadline:
                         result=event.WaitForMultipleObjects([owner,child],False,150)

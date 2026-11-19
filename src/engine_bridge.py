@@ -14,9 +14,9 @@ def bind(translator):
     command = getattr(translator, "command", None)
     args = getattr(translator, "args", [])
     if (translator.__class__.__module__ != "pdf2zh_next.translator.translator_impl.clitranslator"
-            or not command or Path(command).resolve() != SLOT / "runtime/Scripts/python.exe"
+            or not command or Path(command).resolve() != (SLOT / "runtime/Scripts/python.exe").resolve()
             or len(args) != 14 or args[:3] != ["-I", "-X", "utf8"]
-            or Path(args[3]).resolve() != SLOT / "pkg/src/adapter/codex_translate.py"
+            or Path(args[3]).resolve() != (SLOT / "pkg/src/adapter/codex_translate.py").resolve()
             or args[4::2] != ["--source", "--target", "--prompt-version", "--model", "--effort"]):
         return False
     source, target, version, model, effort = args[5::2]

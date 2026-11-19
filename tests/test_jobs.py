@@ -26,15 +26,14 @@ class Lifecycle(unittest.TestCase):
                 for n in range(2):
                     marker=work/f"pid{n}"
                     with open(os.devnull,"rb") as inp, open(os.devnull,"wb") as out:
-                        with child_tree([sys.executable,script,marker],os.environ.copy(),work,inp,out,out) as (_,parent):
+                        with child_tree([sys.executable,script,marker],os.environ.copy(),work,inp,out,out,wait_for_tree=True) as (_,parent):
                             deadline=time.monotonic()+8
                             while not marker.exists() and time.monotonic()<deadline:
                                 time.sleep(.05)
                             child=int(marker.read_text())
                             owned=[psutil.Process(parent),psutil.Process(child)]
                             self.assertTrue(owned[1].is_running())
-                        _,alive=psutil.wait_procs(owned,timeout=6)
-                        self.assertFalse(alive)
+                        self.assertFalse(any(p.is_running() for p in owned))
                         self.assertIsNone(independent.poll())
             finally:
                 independent.terminate()
