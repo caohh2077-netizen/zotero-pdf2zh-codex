@@ -14,11 +14,12 @@ import subprocess
 import sys
 import tempfile
 import time
-from urllib.request import Request, urlopen
+from urllib.request import urlopen
 import zipfile
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from common import LOCK, PKG, atomic, digest, read, save, slot_path
+from common import LOCK, PKG, atomic, digest, download, read, save, slot_path
+import codex_runtime
 from wheels import fetch
 import patch_runtime
 
@@ -57,22 +58,6 @@ def install_lock(state):
         finally:
             f.seek(0)
             msvcrt.locking(f.fileno(),msvcrt.LK_UNLCK,1)
-
-
-def download(url, target, sha):
-    if target.is_file() and digest(target)==sha:
-        return
-    target.parent.mkdir(parents=True,exist_ok=True)
-    with tempfile.NamedTemporaryFile(dir=target.parent,delete=False) as tmp:
-        staged=Path(tmp.name)
-    try:
-        with urlopen(Request(url,headers={"User-Agent":"Zotero-PDF2zh-Codex"}),timeout=90) as r, staged.open("wb") as out:
-            shutil.copyfileobj(r,out)
-        if digest(staged)!=sha:
-            raise ValueError("Asset checksum mismatch: "+target.name)
-        os.replace(staged,target)
-    finally:
-        staged.unlink(missing_ok=True)
 
 
 def unpack(archive,destination):
@@ -137,7 +122,7 @@ def install(root,args):
         active=read(state/"active.json").get("active") if (state/"active.json").exists() else None
         prior=read(slot_path(root,active)/"settings.json") if active and active!="legacy" else {}
         zotero=exe_path(args.zotero or prior.get("zotero"),"zotero.exe",(root.parent/"Zotero/zotero.exe",Path(os.environ["PROGRAMFILES"])/"Zotero/zotero.exe"))
-        codex=exe_path(args.codex or prior.get("codex"),"codex.exe")
+        binary=codex_runtime.ensure(root, source=args.codex, asset_dir=args.asset_dir)
         if not (slot/"ready.json").exists():
             slot.mkdir(parents=True,exist_ok=True)
             for f in files:
@@ -181,18 +166,21 @@ def install(root,args):
             data=slot/"engine-data"
             env=dict(os.environ,USERPROFILE=str(data),HOME=str(data),TIKTOKEN_CACHE_DIR=str(data/".cache/babeldoc/tiktoken"))
             runtime(slot,slot/"pkg/src/assets.py",slot,*profiles,env=env)
-            settings={"root":str(root),"zotero":zotero,"codex":codex,"source":"en","target":"zh-CN","id":name}
+            settings={"root":str(root),"zotero":zotero,"codex":str(binary),"source":"en","target":"zh-CN","id":name}
             if previous and previous!="legacy":
                 prior=read(slot_path(root,previous)/"settings.json")
                 settings.update(source=prior["source"],target=prior["target"])
             save(slot/"settings.json",settings)
             configure(slot,settings["source"],settings["target"])
             save(slot/"ready.json",{"id":name,"release":LOCK["release"],"source":fingerprint.hexdigest()})
+        else:
+            codex_runtime.record_executable(slot/"settings.json", binary)
         save(state/"candidate.json",{"id":name})
         if not (state/"active.json").exists():
             save(state/"active.json",{"active":"legacy" if (root/"pdf2zh-launcher.pyw").exists() else None,"previous":None})
         atomic(managed/"pair_frontend.py",(PKG/"src/pair_frontend.py").read_bytes())
         atomic(managed/"start.pyw",(PKG/"src/start.pyw").read_bytes())
+        print("Translation CLI", binary)
         print("Candidate ready:",slot)
     return slot
 
@@ -219,6 +207,8 @@ def active_switch(root,dest,slot=None):
     if current.get("active")==dest:
         (state/"pending.json").unlink(missing_ok=True)
         return
+    if slot is not None and current.get("active") not in (None, "legacy"):
+        codex_runtime.migrate_previous(slot_path(root, current["active"]), codex_runtime.executable(root))
     running=subprocess.run(["tasklist","/FI","IMAGENAME eq zotero.exe","/FO","CSV","/NH"],capture_output=True,
                            creationflags=subprocess.CREATE_NO_WINDOW).stdout.lower()
     if b"zotero.exe" not in running:

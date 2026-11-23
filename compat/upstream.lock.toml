@@ -1,4 +1,4 @@
-release = "0.3.1"
+release = "0.3.2"
 xpi_version = "4.1.8.4"
 xpi_sha256 = "e87c1dbe63af640ac054ea28f93cf069804a2095eb1ca7ad10190d19eb8a44cf"
 protocol = 2
@@ -10,11 +10,15 @@ tag = "v4.1.8"
 commit = "5dd2eaf019f71266764c269bbd2104b559ae95cf"
 server_version = "4.1.8"
 zotero_versions = ["10.0.8"]
-codex_versions = ["0.169.0-alpha.11.1"]
 model = "gpt-6.2-sol"
 python = "3.12.10"
 pdf2zh_next = "2.10.2"
 babeldoc = "0.7.1"
+[codex_cli]
+version = "0.169.0-alpha.11.1"
+asset = "codex-x86_64-pc-windows-msvc.exe"
+sha256 = "a473edef0d52c4ffa067060ddd48a3d85720a3256cbd0510aab71d406f3af744"
+tar_gz_sha256 = "b6bba2d00616086206da4a3316891b89eda673f8b5642fbe3b08f5c46c6a1a9a"
 [ocr]
 commit = "87416418657359cb625c412a48b6e1d6d41c29bd"
 eng_sha256 = "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"

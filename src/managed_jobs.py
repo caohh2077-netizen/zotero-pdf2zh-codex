@@ -12,6 +12,7 @@ import win32process
 
 from adapter.codex_translate import ERRORS, environment, language
 from common import LOCK, PKG, read
+from codex_runtime import executable
 from fragments import Fragments
 from options import Selection, capabilities
 from winjob import child_tree
@@ -63,7 +64,7 @@ class ManagedJobs:
         app.add_url_rule("/api/codex/tasks/<task>/cancel", "codex_cancel", self.cancel, methods=["POST"])
 
     def catalog(self, refresh=False):
-        return capabilities(self.settings["codex"], environment(), refresh)
+        return capabilities(executable(self.settings["root"]), environment(), refresh)
 
     def catalog_route(self):
         try:

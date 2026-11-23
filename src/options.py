@@ -10,6 +10,7 @@ import threading
 import unicodedata
 
 from common import LOCK
+from codex_runtime import REPAIR_MESSAGE
 
 MODEL_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}\Z")
 EFFORTS = {"none", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}
@@ -93,7 +94,11 @@ def project(data):
 
 def capabilities(binary, env, refresh=False):
     path = Path(env["CODEX_HOME"]) / "models_cache.json"
-    identity = (str(binary), os.stat(binary).st_mtime_ns, str(path))
+    try:
+        modified = os.stat(binary).st_mtime_ns
+    except OSError as error:
+        raise ValueError(REPAIR_MESSAGE) from error
+    identity = (str(binary), modified, str(path))
     with _catalog_lock:
         stamp = path.stat().st_mtime_ns if path.is_file() else None
         if not refresh and identity in _cached and _cached[identity][0] == stamp:

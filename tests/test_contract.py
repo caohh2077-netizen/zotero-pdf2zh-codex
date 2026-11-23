@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import shlex
 import sys
+import tarfile
 import tempfile
 import tomllib
 import unittest
@@ -13,8 +14,10 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/"src"),str(ROOT/"src/adapter"),str(ROOT/"scripts")]
 import check_upstream
+import codex_runtime
 import codex_translate as cli
 import manage
+import managed_jobs
 import migrate
 import tomlkit
 from common import LOCK, atomic, read, save, slot_path
@@ -105,11 +108,93 @@ class Contract(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     slot_path(root,bad)
             save(root/"active.json",{"active":"good"})
-            with patch("urllib.request.urlopen",side_effect=AssertionError), patch("manage.urlopen",return_value=io.BytesIO(b"bad")):
+            with patch("common.urlopen",return_value=io.BytesIO(b"bad")):
                 with self.assertRaises(ValueError):
                     manage.download("https://example.com",root/"asset.zip","0"*64)
             self.assertEqual(read(root/"active.json"),{"active":"good"})
             self.assertFalse((root/"asset.zip").exists())
+
+    def test_desktop_update_does_not_change_catalog_or_translation_executable(self):
+        content = b"pinned official fixture"
+        sha = hashlib.sha256(content).hexdigest()
+        with tempfile.TemporaryDirectory() as folder, patch.dict(LOCK["codex_cli"], {"sha256": sha}):
+            root = Path(folder)
+            old = root/"WindowsApps/OpenAI.Codex_old/app/resources/codex.exe"
+            atomic(old, content)
+            binary = codex_runtime.ensure(root, source=old)
+            self.assertEqual(binary, root/"managed/tools/codex"/LOCK["codex_cli"]["version"]/"codex.exe")
+            before = binary.stat().st_mtime_ns
+            old.unlink()
+            newer = root/"WindowsApps/OpenAI.Codex_new/app/resources/codex.exe"
+            atomic(newer, b"different CLI")
+            with patch.dict(os.environ, {"PATH": str(newer.parent)}), patch("common.urlopen", side_effect=AssertionError):
+                self.assertEqual(codex_runtime.ensure(root), binary)
+                self.assertEqual(binary.stat().st_mtime_ns, before)
+            self.assertEqual(binary.read_bytes(), content)
+            jobs = object.__new__(managed_jobs.ManagedJobs)
+            jobs.settings = {"root": str(root), "codex": str(old)}
+            env = dict(cli.environment(), TEMP=folder)
+            with patch.object(managed_jobs, "environment", return_value=env), patch.object(managed_jobs, "capabilities") as catalog:
+                jobs.catalog(refresh=True)
+                catalog.assert_called_once_with(binary, env, True)
+            (root/"managed/state").mkdir()
+            with patch.object(cli, "environment", return_value=env), patch.object(cli, "ensure_cli") as check, \
+                 patch.object(cli, "invoke", return_value="样品") as invoke:
+                self.assertEqual(cli.translate(jobs.settings, "en", "zh-CN", "sample"), "样品")
+                self.assertEqual(check.call_args.args[0], binary)
+                self.assertEqual(invoke.call_args.args[0], binary)
+
+    def test_archive_integrity_and_offline_repair(self):
+        data = b"known CLI fixture"
+        spec = LOCK["codex_cli"]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            archive = root/(spec["asset"] + ".tar.gz")
+            with tarfile.open(archive, "w:gz") as package:
+                member = tarfile.TarInfo(spec["asset"])
+                member.size = len(data)
+                package.addfile(member, io.BytesIO(data))
+            archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+            binary = codex_runtime.executable(root)
+            atomic(binary, b"old executable")
+            with patch.dict(spec, {"sha256": "0"*64, "tar_gz_sha256": "0"*64}):
+                with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                    codex_runtime.ensure(root, asset_dir=root)
+            with patch.dict(spec, {"sha256": "0"*64, "tar_gz_sha256": archive_sha}):
+                with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                    codex_runtime.ensure(root, asset_dir=root)
+            self.assertEqual(binary.read_bytes(), b"old executable")
+            self.assertEqual(list(binary.parent.iterdir()), [binary])
+            archive.unlink()
+            with patch.dict(spec, {"sha256": hashlib.sha256(data).hexdigest(), "tar_gz_sha256": archive_sha}), \
+                 patch("common.urlopen", side_effect=AssertionError):
+                self.assertEqual(codex_runtime.ensure(root), binary)
+                binary.unlink()
+                self.assertEqual(codex_runtime.ensure(root).read_bytes(), data)
+
+    def test_compatible_rollback_migrates_only_the_executable(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            binary = codex_runtime.executable(root)
+            slot = root/"old-slot"
+            manifest = slot/"pkg/compat/upstream.lock.toml"
+            version = LOCK["codex_cli"]["version"]
+            atomic(manifest, f'codex_versions=["{version}"]'.encode())
+            config = slot/"settings.json"
+            external = root/"WindowsApps/OpenAI.Codex_old/app/resources/codex.exe"
+            settings = {"root": folder, "source": "de", "target": "zh-CN", "codex": str(external)}
+            save(config, settings)
+            codex_runtime.migrate_previous(slot, binary)
+            self.assertEqual(read(config), dict(settings, codex=str(binary)))
+            custom = root/"standalone/codex.exe"
+            atomic(custom, b"older user-managed CLI")
+            save(config, dict(settings, codex=str(custom)))
+            codex_runtime.migrate_previous(slot, binary)
+            self.assertEqual(read(config)["codex"], str(custom))
+            atomic(manifest, b'codex_versions=["other"]')
+            save(config, settings)
+            codex_runtime.migrate_previous(slot, binary)
+            self.assertEqual(read(config), settings)
 
     def test_version_switch_failure_defer_and_rollback(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import tempfile
 import tomllib
+from urllib.request import Request, urlopen
 
 PKG = Path(__file__).resolve().parents[1]
 LOCK = tomllib.loads((PKG / "compat/upstream.lock.toml").read_text("utf-8"))
@@ -40,6 +41,39 @@ def save(path, obj):
 def digest(path):
     with Path(path).open("rb") as source:
         return hashlib.file_digest(source, "sha256").hexdigest()
+
+
+def verified_copy(source, target, sha):
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp = tempfile.NamedTemporaryFile(dir=target.parent, delete=False)
+    staged = Path(temp.name)
+    try:
+        checksum = hashlib.sha256()
+        with temp:
+            while block := source.read(1024 * 1024):
+                temp.write(block)
+                checksum.update(block)
+            if checksum.hexdigest() != sha:
+                raise ValueError("SHA-256 mismatch: " + target.name)
+            temp.flush()
+            os.fsync(temp.fileno())
+        try:
+            os.replace(staged, target)
+        except PermissionError:
+            # A concurrent installer may already have published the verified
+            # executable and Windows may now have it open.
+            if not target.is_file() or digest(target) != sha:
+                raise
+    finally:
+        staged.unlink(missing_ok=True)
+
+
+def download(url, target, sha):
+    if target.is_file() and digest(target) == sha:
+        return
+    request = Request(url, headers={"User-Agent": "Zotero-PDF2zh-Codex"})
+    with urlopen(request, timeout=90) as response:
+        verified_copy(response, target, sha)
 
 
 def slot_path(root, name):

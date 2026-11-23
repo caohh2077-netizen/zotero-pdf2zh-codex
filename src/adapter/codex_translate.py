@@ -14,6 +14,7 @@ from urllib.request import getproxies
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from common import LOCK, PKG, read, save, system_id
+from codex_runtime import REPAIR_MESSAGE, executable
 from winjob import child_tree, execution_slot, mutex, resident_slot
 from options import MODEL_ID, EFFORTS, prefix_digest, subject_prefix
 import uuid
@@ -25,8 +26,8 @@ import win32process
 
 SLOT = PKG.parent
 ERRORS = {
-    "cli": "Codex CLI not found or incompatible. Run Doctor.ps1.",
-    "login": "ChatGPT login is required. Run codex login, then Doctor.ps1.",
+    "cli": REPAIR_MESSAGE,
+    "login": "需要登录 ChatGPT。运行 Doctor.ps1 可查看翻译专用 Codex 的登录命令。",
     "quota": "Codex 订阅额度已用尽。",
     "rate": "Codex 暂时限流。",
     "model": "Codex 账户不支持所选模型或思考强度。",
@@ -107,7 +108,7 @@ def probe(binary, env):
                                creationflags=subprocess.CREATE_NO_WINDOW)
             return p.returncode, (p.stdout + p.stderr).decode("utf-8", "replace")
         rc, ver = run(["--version"])
-        if rc or not any("codex-cli "+v in ver.splitlines() for v in LOCK["codex_versions"]):
+        if rc or f"codex-cli {LOCK['codex_cli']['version']}" not in ver.splitlines():
             raise Failure("cli")
         rc, help_text = run(["exec", "--help"])
         if rc or not all(s in help_text for s in ("--ignore-user-config", "--ephemeral", "--json", "--skip-git-repo-check")):
@@ -240,7 +241,11 @@ def invoke(binary, env, source, target, text, deadline, model=None, effort=None,
 
 
 def ensure_cli(binary, env, state, user):
-    fingerprint = [str(binary), binary.stat().st_mtime_ns, env["CODEX_HOME"]]
+    try:
+        modified = binary.stat().st_mtime_ns
+    except OSError as error:
+        raise Failure("cli") from error
+    fingerprint = [str(binary), modified, env["CODEX_HOME"]]
     auth = Path(env["CODEX_HOME"]) / "auth.json"
     fingerprint.append(auth.stat().st_mtime_ns if auth.exists() else None)
     stamp = state / "cli-check-v2.json"
@@ -322,7 +327,7 @@ def translate(settings, source, target, text, model=None, effort=None, runner=No
         raise Failure("model")
     env = environment()
     state = Path(settings["root"]) / "managed/state"
-    binary = Path(settings["codex"])
+    binary = executable(settings["root"])
     token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), win32con.TOKEN_QUERY)
     try:
         sid, _ = win32security.GetTokenInformation(token,win32security.TokenUser)
