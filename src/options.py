@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import threading
+import time
 import unicodedata
 
 from common import LOCK
@@ -31,6 +32,7 @@ SUBJECT_PRESETS = {
 }
 _catalog_lock = threading.Lock()
 _cached = {}
+ACCOUNT_FALLBACK_SECONDS = 24 * 60 * 60
 
 
 def normalize_subject(value):
@@ -92,6 +94,25 @@ def project(data):
     return models
 
 
+def cli_catalog(binary, env, *, bundled=False):
+    args = [str(binary), "debug", "models"]
+    if bundled:
+        args.append("--bundled")
+    proc = subprocess.run(args, capture_output=True, env=env, timeout=30,
+                          creationflags=subprocess.CREATE_NO_WINDOW)
+    if proc.returncode:
+        raise ValueError("Codex 无法读取模型目录，请检查登录及网络。")
+    return json.loads(proc.stdout)
+
+
+def account_catalog(path):
+    try:
+        with path.open("rb") as stream:
+            return os.fstat(stream.fileno()).st_mtime_ns, project(json.load(stream))
+    except (OSError, ValueError, TypeError, KeyError, AttributeError):
+        return None, None
+
+
 def capabilities(binary, env, refresh=False):
     path = Path(env["CODEX_HOME"]) / "models_cache.json"
     try:
@@ -100,25 +121,33 @@ def capabilities(binary, env, refresh=False):
         raise ValueError(REPAIR_MESSAGE) from error
     identity = (str(binary), modified, str(path))
     with _catalog_lock:
-        stamp = path.stat().st_mtime_ns if path.is_file() else None
+        try:
+            stamp = path.stat().st_mtime_ns
+        except OSError:
+            stamp = None
         if not refresh and identity in _cached and _cached[identity][0] == stamp:
             return _cached[identity][1]
-        source = "account-cache"
-        if refresh or not path.is_file():
-            proc = subprocess.run([str(binary), "debug", "models"], capture_output=True, env=env, timeout=30,
-                                  creationflags=subprocess.CREATE_NO_WINDOW)
-            if proc.returncode:
-                raise ValueError("Codex 无法刷新当前账户的模型目录，请检查登录及网络。")
-            data = json.loads(proc.stdout)
-            source = "codex-debug"
+        if refresh:
+            raw = cli_catalog(binary, env)
+            models, source = project(raw), "codex-debug"
+            stamp, account = account_catalog(path)
+            # The CLI can exit successfully with its bundled catalog when refresh fails.
+            # Keep a recent account list only for that exact response.
+            if (account and account != models and
+                    0 <= time.time() - stamp / 1e9 <= ACCOUNT_FALLBACK_SECONDS and
+                    raw == cli_catalog(binary, env, bundled=True)):
+                models, source = account, "account-cache"
         else:
-            data = json.loads(path.read_bytes())
-        result = {"protocol": 2, "models": project(data), "source": source, "maxWorkers": LIMIT,
+            stamp, models = account_catalog(path)
+            source = "account-cache"
+            if not models:
+                models, source = project(cli_catalog(binary, env)), "codex-debug"
+        result = {"protocol": 2, "models": models, "source": source, "maxWorkers": LIMIT,
                   "subjectContext": {"version": 1, "requestProtocol": 3, "template": SUBJECT_TEMPLATE,
                                      "presets": [{"id": key, "label": label, "field": field}
                                                  for key, (label, field) in SUBJECT_PRESETS.items()]},
                   "defaults": {"model": LOCK["model"], "effort": LOCK["effort"], "workers": 10}}
-        _cached[identity] = (path.stat().st_mtime_ns if path.is_file() else None, result)
+        _cached[identity] = (stamp, result)
         return result
 
 

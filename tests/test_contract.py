@@ -7,6 +7,7 @@ import shlex
 import sys
 import tarfile
 import tempfile
+import time
 import tomllib
 import unittest
 from unittest.mock import patch
@@ -19,6 +20,7 @@ import codex_translate as cli
 import manage
 import managed_jobs
 import migrate
+import options
 import tomlkit
 from common import LOCK, atomic, read, save, slot_path
 from pdf2zh_next.config import ConfigManager
@@ -195,6 +197,36 @@ class Contract(unittest.TestCase):
             save(config, settings)
             codex_runtime.migrate_previous(slot, binary)
             self.assertEqual(read(config), settings)
+
+    def test_refresh_distinguishes_bundled_models_from_account_updates(self):
+        def catalog(model):
+            return {"models": [{"slug": model, "supported_reasoning_levels": [{"effort": "xhigh"}]}]}
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            binary = root/"codex.exe"
+            atomic(binary, b"fixture")
+            cache = root/"models_cache.json"
+            env = {"CODEX_HOME": folder}
+            bundled, account, changed = map(catalog, ("bundled-model", "account-model", "new-account-model"))
+            save(cache, account)
+            with patch.object(options, "cli_catalog", return_value=bundled) as run:
+                result = options.capabilities(binary, env, refresh=True)
+                self.assertEqual((result["source"], result["models"][0]["id"]), ("account-cache", "account-model"))
+                self.assertEqual(result, options.capabilities(binary, env))
+                self.assertEqual(run.call_count, 2)
+                self.assertTrue(run.call_args.kwargs["bundled"])
+            with patch.object(options, "cli_catalog", side_effect=[changed, bundled]):
+                result = options.capabilities(binary, env, refresh=True)
+                self.assertEqual((result["source"], result["models"][0]["id"]), ("codex-debug", "new-account-model"))
+            yesterday = time.time() - options.ACCOUNT_FALLBACK_SECONDS - 10
+            os.utime(cache, (yesterday, yesterday))
+            with patch.object(options, "cli_catalog", return_value=bundled) as run:
+                result = options.capabilities(binary, env, refresh=True)
+                self.assertEqual(result["models"][0]["id"], "bundled-model")
+                run.assert_called_once_with(binary, env)
+            atomic(cache, b"unrecognized cache format")
+            with patch.object(options, "cli_catalog", return_value=changed):
+                self.assertEqual(options.capabilities(binary, env)["models"][0]["id"], "new-account-model")
 
     def test_version_switch_failure_defer_and_rollback(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,4 +1,4 @@
-release = "0.3.2"
+release = "0.3.3"
 xpi_version = "4.1.8.4"
 xpi_sha256 = "e87c1dbe63af640ac054ea28f93cf069804a2095eb1ca7ad10190d19eb8a44cf"
 protocol = 2
