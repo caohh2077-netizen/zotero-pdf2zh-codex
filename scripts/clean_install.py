@@ -23,7 +23,9 @@ with tempfile.TemporaryDirectory(prefix="Zotero 安装 ") as folder:
     marker=(slot/"ready.json").stat().st_mtime_ns
     binary = executable(root)
     settings = read(slot/"settings.json")
-    assert settings["codex"] == str(binary) and digest(binary) == LOCK["codex_cli"]["sha256"]
+    # Runner temp directories may use the Windows 8.3 spelling of the user profile.
+    assert Path(settings["codex"]).samefile(binary), (settings["codex"], str(binary))
+    assert digest(binary) == LOCK["codex_cli"]["sha256"]
     version = subprocess.check_output([binary, "--version"], text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     assert version.strip() == "codex-cli " + LOCK["codex_cli"]["version"]
     binary_time = binary.stat().st_mtime_ns
